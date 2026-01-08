@@ -1,0 +1,129 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-color: #f8f9fa;
+  --header-bg: #ffffff;
+  --text-color: #212529;
+  --text-secondary: #6c757d;
+  --border-color: #dee2e6;
+  --button-bg: #e9ecef;
+  --button-hover: #dee2e6;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #1a1a2e;
+    --header-bg: #16213e;
+    --text-color: #e8e8e8;
+    --text-secondary: #a0a0a0;
+    --border-color: #0f3460;
+    --button-bg: #0f3460;
+    --button-hover: #1f4287;
+  }
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+#header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background-color: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+#header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+#controls {
+  display: flex;
+  gap: 8px;
+}
+
+#controls button {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background-color: var(--button-bg);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+#controls button:hover {
+  background-color: var(--button-hover);
+}
+
+#canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#tree-canvas {
+  display: block;
+  cursor: grab;
+}
+
+#tree-canvas:active {
+  cursor: grabbing;
+}
+
+#tooltip {
+  position: fixed;
+  padding: 8px 12px;
+  background-color: var(--header-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-color);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  pointer-events: none;
+  z-index: 1000;
+  max-width: 300px;
+  word-wrap: break-word;
+}
+
+#tooltip.hidden {
+  display: none;
+}
+
+#tooltip .tooltip-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+#tooltip .tooltip-url {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+#tooltip .tooltip-time {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-top: 4px;
+}
