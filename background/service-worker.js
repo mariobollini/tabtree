@@ -16,6 +16,18 @@ initDB().then(() => {
   console.error('Canopy: Failed to initialize database', err);
 });
 
+// Track tab relationships
+const pendingTabParents = new Map(); // tabId → openerTabId
+const lastNodePerTab = new Map(); // tabId → nodeId
+
+// Listen for tab creation to capture parent relationships
+chrome.tabs.onCreated.addListener((tab) => {
+  if (tab.openerTabId) {
+    pendingTabParents.set(tab.id, tab.openerTabId);
+    console.log('Canopy: Tab', tab.id, 'opened from tab', tab.openerTabId);
+  }
+});
+
 // Helper to check if URL should be tracked
 function shouldTrackUrl(url) {
   if (!url) return false;
@@ -36,20 +48,22 @@ function getFaviconUrl(url) {
   }
 }
 
-// Create a new branch (every tab is a trunk - simple model)
-async function createBranch(tabId) {
+// Create a new branch with optional parent tracking
+async function createBranch(tabId, openerNodeId = null) {
   const branch = {
     id: generateId(),
-    parentNodeId: null,
+    parentNodeId: null,  // Keep for backward compatibility
+    openerNodeId,        // Which node opened this tab
     tabId,
     createdAt: Date.now(),
-    isTrunk: true
+    isTrunk: openerNodeId === null  // True only if no opener
   };
 
   await addBranch(branch);
   await setTabMapping(tabId, branch.id);
 
-  console.log('Canopy: Created branch', branch.id, 'for tab', tabId);
+  console.log('Canopy: Created branch', branch.id, 'for tab', tabId,
+              openerNodeId ? `(opened from node ${openerNodeId})` : '(trunk)');
   return branch;
 }
 
@@ -59,7 +73,16 @@ async function createNode(tabId, url, title) {
 
   // If no branch exists for this tab, create one
   if (!branchId) {
-    const branch = await createBranch(tabId);
+    let openerNodeId = null;
+
+    // Check if this tab was opened from another tab
+    if (pendingTabParents.has(tabId)) {
+      const openerTabId = pendingTabParents.get(tabId);
+      openerNodeId = lastNodePerTab.get(openerTabId) || null;
+      pendingTabParents.delete(tabId); // Clean up
+    }
+
+    const branch = await createBranch(tabId, openerNodeId);
     branchId = branch.id;
   }
 
@@ -78,6 +101,10 @@ async function createNode(tabId, url, title) {
   };
 
   await addNode(node);
+
+  // Update last node tracker
+  lastNodePerTab.set(tabId, node.id);
+
   console.log('Canopy: Created node', node.id, 'for', url);
 
   return node;
@@ -86,6 +113,8 @@ async function createNode(tabId, url, title) {
 // Listen for tab removal to clean up mappings
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   await removeTabMapping(tabId);
+  lastNodePerTab.delete(tabId);
+  pendingTabParents.delete(tabId);
   console.log('Canopy: Cleaned up tab', tabId);
 });
 

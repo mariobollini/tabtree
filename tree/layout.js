@@ -72,6 +72,34 @@ export function calculateLayout(data, viewportWidth, openTabIds = new Set()) {
     }
   }
 
+  // Build cross-branch connections (parent tab → child tab)
+  for (const branch of sortedBranches) {
+    if (branch.openerNodeId) {
+      // Find the opener node position
+      const openerNodePos = nodePositionMap.get(branch.openerNodeId);
+
+      if (openerNodePos) {
+        // Find child branch nodes
+        const childBranchNodes = positionedNodes
+          .filter(pos => pos.node.branchId === branch.id)
+          .sort((a, b) => a.y - b.y); // Sort by Y position
+
+        if (childBranchNodes.length > 0) {
+          // Get the oldest (bottom-most) node in child branch
+          const oldestChildNode = childBranchNodes[childBranchNodes.length - 1];
+
+          // Create cross-branch connection
+          connections.push({
+            type: 'cross-branch',
+            from: openerNodePos,
+            to: oldestChildNode, // Base of child column
+            branch: branch
+          });
+        }
+      }
+    }
+  }
+
   // Build branch headers with positions
   const branchHeaders = sortedBranches.map(branch => {
     const branchNodes = nodesByBranch.get(branch.id) || [];

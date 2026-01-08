@@ -693,23 +693,56 @@ export class TreeRenderer {
 
   renderConnections() {
     for (const conn of this.layout.connections) {
-      const { from, to } = conn;
-      const branchColor = this.getBranchColor(to.node.branchId);
+      const { from, to, type } = conn;
 
-      this.ctx.beginPath();
-      this.ctx.strokeStyle = branchColor + '40';
-      this.ctx.lineWidth = 2;
-      this.ctx.lineCap = 'round';
+      if (type === 'cross-branch') {
+        // Curved connection between tabs
+        this.renderCrossBranchConnection(conn);
+      } else {
+        // Straight connection within same branch
+        const branchColor = this.getBranchColor(to.node.branchId);
 
-      const startX = from.x + from.width / 2;
-      const startY = from.y + from.height;
-      const endX = to.x + to.width / 2;
-      const endY = to.y;
+        this.ctx.beginPath();
+        this.ctx.strokeStyle = branchColor + '40';
+        this.ctx.lineWidth = 2;
+        this.ctx.lineCap = 'round';
 
-      this.ctx.moveTo(startX, startY);
-      this.ctx.lineTo(endX, endY);
-      this.ctx.stroke();
+        const startX = from.x + from.width / 2;
+        const startY = from.y + from.height;
+        const endX = to.x + to.width / 2;
+        const endY = to.y;
+
+        this.ctx.moveTo(startX, startY);
+        this.ctx.lineTo(endX, endY);
+        this.ctx.stroke();
+      }
     }
+  }
+
+  renderCrossBranchConnection(conn) {
+    const { from, to, branch } = conn;
+    const branchColor = this.getBranchColor(branch.id);
+
+    // Start: right edge of parent node, middle vertically
+    const startX = from.x + from.width;
+    const startY = from.y + (from.height / 2);
+
+    // End: left edge of child column base, middle vertically
+    const endX = to.x;
+    const endY = to.y + (to.height / 2);
+
+    // Control point: midpoint horizontally, at parent Y level
+    const controlX = (startX + endX) / 2;
+    const controlY = startY;
+
+    this.ctx.beginPath();
+    this.ctx.strokeStyle = branchColor + '40'; // Same as within-branch
+    this.ctx.lineWidth = 2;
+    this.ctx.lineCap = 'round';
+
+    this.ctx.moveTo(startX, startY);
+    this.ctx.quadraticCurveTo(controlX, controlY, endX, endY);
+    this.ctx.stroke();
   }
 
   renderHeaders() {
