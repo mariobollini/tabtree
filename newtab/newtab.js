@@ -1,7 +1,7 @@
 import { initDB, getTreeData, clearAllData, updateBranchTitle, getNodesByBranch, updateBranchSummary, getAllBranches } from '../storage/db.js';
 import { calculateLayout, compressLayout } from '../tree/layout.js';
 import { TreeRenderer } from '../tree/renderer.js';
-import { initSummarizer, generateSummary, isSummarizerAvailable } from './summarizer.js';
+import { initSummarizer, generateSummary, isSummarizerAvailable, getSummarizerError } from './summarizer.js';
 
 let renderer = null;
 let tooltip = null;
@@ -80,7 +80,7 @@ async function loadAndRender() {
     layout = compressLayout(layout, canvasRect.width);
 
     // Pass AI availability info to renderer
-    renderer.setAiAvailable(isSummarizerAvailable());
+    renderer.setAiAvailable(isSummarizerAvailable(), getSummarizerError());
     renderer.setLayout(layout);
 
     if (layout.positionedNodes.length > 0) {

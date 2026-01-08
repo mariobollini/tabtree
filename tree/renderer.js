@@ -21,6 +21,7 @@ export class TreeRenderer {
     this.hoveredNode = null;
     this.hoveredHeader = null;
     this.aiAvailable = false;
+    this.aiError = null;
 
     // Favicon cache
     this.faviconCache = new Map();
@@ -140,8 +141,9 @@ export class TreeRenderer {
     this.render();
   }
 
-  setAiAvailable(available) {
+  setAiAvailable(available, errorMsg = null) {
     this.aiAvailable = available;
+    this.aiError = errorMsg;
   }
 
   screenToWorld(screenX, screenY) {
@@ -313,17 +315,24 @@ export class TreeRenderer {
     const viewLeftX = -this.offsetX / this.scale;
     const viewRightX = (viewWidth - this.offsetX) / this.scale;
 
-    // If leftmost visible column is off-screen to the left, pan to show it
-    if (leftmostX < viewLeftX) {
-      // Pan left to show the leftmost column
+    // Add threshold to avoid tiny adjustments that cause stuttering
+    const threshold = 100; // pixels
+
+    // If leftmost visible column is significantly off-screen to the left, pan to show it
+    if (leftmostX < viewLeftX - threshold) {
+      // Smooth pan left to show the leftmost column
       const targetOffsetX = -leftmostX * this.scale + 40;
-      this.offsetX = targetOffsetX;
+      const diff = targetOffsetX - this.offsetX;
+      // Ease into the new position (20% per frame)
+      this.offsetX += diff * 0.2;
     }
-    // If rightmost visible column is off-screen to the right, pan to show it
-    else if (rightmostX > viewRightX) {
-      // Pan right to show the rightmost column
+    // If rightmost visible column is significantly off-screen to the right, pan to show it
+    else if (rightmostX > viewRightX + threshold) {
+      // Smooth pan right to show the rightmost column
       const targetOffsetX = viewWidth - rightmostX * this.scale - 40;
-      this.offsetX = targetOffsetX;
+      const diff = targetOffsetX - this.offsetX;
+      // Ease into the new position (20% per frame)
+      this.offsetX += diff * 0.2;
     }
   }
 
@@ -533,8 +542,35 @@ export class TreeRenderer {
   renderHeaders() {
     if (!this.layout.branchHeaders) return;
 
+    const viewHeight = this.canvas.height / this.dpr;
+    const topY = -this.offsetY / this.scale;
+    const bottomY = (viewHeight - this.offsetY) / this.scale;
+
     for (const header of this.layout.branchHeaders) {
-      this.renderHeader(header);
+      // Check if header is above viewport
+      const headerBottom = header.y + header.height;
+      let adjustedHeader = header;
+
+      // If header is scrolled out of view above, reposition it above topmost visible node
+      if (headerBottom < topY) {
+        // Find topmost visible node in this branch
+        const branchNodes = this.layout.positionedNodes
+          .filter(pos => pos.node.branchId === header.branch.id)
+          .filter(pos => {
+            const nodeBottom = pos.y + pos.height;
+            return nodeBottom >= topY && pos.y <= bottomY;
+          })
+          .sort((a, b) => a.y - b.y);
+
+        if (branchNodes.length > 0) {
+          const topNode = branchNodes[0];
+          // Position header above the topmost visible node
+          const newY = topNode.y - header.height - 10;
+          adjustedHeader = { ...header, y: newY };
+        }
+      }
+
+      this.renderHeader(adjustedHeader);
     }
   }
 
@@ -589,14 +625,21 @@ export class TreeRenderer {
     } else if (isHovered) {
       // Show AI error message on hover if no summary
       this.ctx.fillStyle = this.colors.textSecondary;
-      this.ctx.font = `italic 13px "Inter", "SF Pro Display", -apple-system, sans-serif`;
+      this.ctx.font = `italic 12px "Inter", "SF Pro Display", -apple-system, sans-serif`;
       this.ctx.textBaseline = 'top';
 
-      const errorMsg = this.aiAvailable
+      const errorMsg = this.aiError || (this.aiAvailable
         ? 'AI summary unavailable'
-        : 'AI not available (requires Chrome 127+)';
+        : 'AI not available (requires Chrome 127+)');
       const summaryY = titleY + 24;
-      this.ctx.fillText(errorMsg, x + 4, summaryY);
+
+      // Wrap error message if needed
+      const lines = this.wrapText(errorMsg, maxWidth);
+      lines.forEach((line, index) => {
+        if (index < 2) { // Max 2 lines
+          this.ctx.fillText(line, x + 4, summaryY + (index * 15));
+        }
+      });
     }
 
     // Edit hint on hover (position below everything)

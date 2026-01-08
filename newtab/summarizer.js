@@ -2,25 +2,45 @@
 
 let summarizer = null;
 let isAvailable = false;
+let errorMessage = null;
 
 // Check if Chrome AI is available
 export async function initSummarizer() {
   try {
-    if (!window.ai || !window.ai.summarizer) {
-      console.log('Canopy: Chrome AI not available (requires Chrome 127+)');
+    console.log('Canopy: Checking for Chrome AI...');
+    console.log('Canopy: window.ai exists?', !!window.ai);
+
+    if (!window.ai) {
+      errorMessage = 'Chrome AI not available. Enable at chrome://flags/#optimization-guide-on-device-model';
+      console.log('Canopy:', errorMessage);
+      console.log('Canopy: Note - Built-in AI is experimental and may require Chrome Canary with flags enabled');
       return false;
     }
 
+    console.log('Canopy: window.ai.summarizer exists?', !!window.ai.summarizer);
+
+    if (!window.ai.summarizer) {
+      errorMessage = 'Summarizer API not available. Try Chrome Canary with --enable-features=SummarizationAPI';
+      console.log('Canopy:', errorMessage);
+      return false;
+    }
+
+    console.log('Canopy: Checking summarizer capabilities...');
     const capabilities = await window.ai.summarizer.capabilities();
+    console.log('Canopy: Capabilities:', capabilities);
+
     if (capabilities.available === 'no') {
-      console.log('Canopy: Summarizer not available on this device');
+      errorMessage = 'Summarizer not available on this device';
+      console.log('Canopy:', errorMessage);
       return false;
     }
 
     if (capabilities.available === 'after-download') {
-      console.log('Canopy: Summarizer downloading in background...');
+      console.log('Canopy: Summarizer model downloading in background...');
+      errorMessage = 'AI model downloading...';
     }
 
+    console.log('Canopy: Creating summarizer...');
     summarizer = await window.ai.summarizer.create({
       type: 'key-points',
       format: 'plain-text',
@@ -28,10 +48,13 @@ export async function initSummarizer() {
     });
 
     isAvailable = true;
-    console.log('Canopy: AI summarization ready');
+    errorMessage = null;
+    console.log('Canopy: AI summarization ready!');
     return true;
   } catch (error) {
-    console.log('Canopy: Chrome AI not supported:', error.message);
+    errorMessage = `Chrome AI error: ${error.message}`;
+    console.error('Canopy: Chrome AI initialization failed:', error);
+    console.log('Canopy: Stack trace:', error.stack);
     return false;
   }
 }
@@ -64,4 +87,8 @@ export async function generateSummary(pages) {
 
 export function isSummarizerAvailable() {
   return isAvailable;
+}
+
+export function getSummarizerError() {
+  return errorMessage;
 }
