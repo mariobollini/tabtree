@@ -20,6 +20,7 @@ export class TreeRenderer {
     this.layout = null;
     this.hoveredNode = null;
     this.hoveredHeader = null;
+    this.aiAvailable = false;
 
     // Favicon cache
     this.faviconCache = new Map();
@@ -137,6 +138,10 @@ export class TreeRenderer {
       }
     }
     this.render();
+  }
+
+  setAiAvailable(available) {
+    this.aiAvailable = available;
   }
 
   screenToWorld(screenX, screenY) {
@@ -378,33 +383,80 @@ export class TreeRenderer {
   }
 
   renderHeader(header) {
-    const { branch, x, y, width, height, title } = header;
+    const { branch, x, y, width, height, title, summary, isClosed } = header;
     const isHovered = this.hoveredHeader === header;
     const branchColor = this.getBranchColor(branch.id);
+
+    const maxWidth = width - 8;
+    const titleY = y + 15;
 
     // Header text
     this.ctx.fillStyle = isHovered ? branchColor : this.colors.text;
     this.ctx.font = `600 17px "Inter", "SF Pro Display", -apple-system, sans-serif`;
     this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'middle';
+    this.ctx.textBaseline = 'top';
 
-    const maxWidth = width - 30;
-    const displayTitle = this.truncateText(title, maxWidth);
-    this.ctx.fillText(displayTitle, x + 4, y + height / 2);
+    // Add space for CLOSED badge if needed
+    const titleMaxWidth = isClosed ? maxWidth - 75 : maxWidth;
+    const displayTitle = this.truncateText(title, titleMaxWidth);
+    this.ctx.fillText(displayTitle, x + 4, titleY);
 
-    // Edit hint on hover
-    if (isHovered) {
+    // CLOSED badge for closed tabs
+    if (isClosed) {
+      const titleWidth = this.ctx.measureText(displayTitle).width;
+      const badgeX = x + 8 + titleWidth;
+      const badgeY = titleY - 2;
+
+      this.ctx.fillStyle = this.colors.textSecondary + '30';
+      this.ctx.fillRect(badgeX, badgeY, 65, 20);
+
+      this.ctx.fillStyle = this.colors.textSecondary;
+      this.ctx.font = `600 11px "Inter", "SF Pro Display", -apple-system, sans-serif`;
+      this.ctx.textBaseline = 'top';
+      this.ctx.fillText('CLOSED', badgeX + 6, badgeY + 4);
+    }
+
+    // Summary text (if available)
+    if (summary) {
       this.ctx.fillStyle = this.colors.textSecondary;
       this.ctx.font = `13px "Inter", "SF Pro Display", -apple-system, sans-serif`;
-      this.ctx.fillText('click to edit', x + 4, y + height / 2 + 18);
+      this.ctx.textBaseline = 'top';
+
+      // Wrap summary to multiple lines if needed
+      const summaryY = titleY + 24;
+      const lines = this.wrapText(summary, maxWidth);
+      lines.forEach((line, index) => {
+        if (index < 2) { // Max 2 lines
+          this.ctx.fillText(line, x + 4, summaryY + (index * 16));
+        }
+      });
+    } else if (isHovered) {
+      // Show AI error message on hover if no summary
+      this.ctx.fillStyle = this.colors.textSecondary;
+      this.ctx.font = `italic 13px "Inter", "SF Pro Display", -apple-system, sans-serif`;
+      this.ctx.textBaseline = 'top';
+
+      const errorMsg = this.aiAvailable
+        ? 'AI summary unavailable'
+        : 'AI not available (requires Chrome 127+)';
+      const summaryY = titleY + 24;
+      this.ctx.fillText(errorMsg, x + 4, summaryY);
+    }
+
+    // Edit hint on hover (position below everything)
+    if (isHovered) {
+      this.ctx.fillStyle = branchColor + '80';
+      this.ctx.font = `12px "Inter", "SF Pro Display", -apple-system, sans-serif`;
+      this.ctx.textBaseline = 'bottom';
+      this.ctx.fillText('click to edit', x + 4, y + height - 4);
     }
 
     // Colored underline
-    this.ctx.strokeStyle = branchColor + '60';
+    this.ctx.strokeStyle = branchColor + '40';
     this.ctx.lineWidth = 2;
     this.ctx.beginPath();
-    this.ctx.moveTo(x + 4, y + height - 2);
-    this.ctx.lineTo(x + Math.min(this.ctx.measureText(displayTitle).width + 4, width - 20), y + height - 2);
+    this.ctx.moveTo(x + 4, titleY + 20);
+    this.ctx.lineTo(x + Math.min(this.ctx.measureText(displayTitle).width + 4, width - 8), titleY + 20);
     this.ctx.stroke();
   }
 
@@ -514,6 +566,32 @@ export class TreeRenderer {
       truncated = truncated.slice(0, -1);
     }
     return truncated + '…';
+  }
+
+  wrapText(text, maxWidth) {
+    if (!text) return [];
+
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? currentLine + ' ' + word : word;
+      const measured = this.ctx.measureText(testLine);
+
+      if (measured.width > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    return lines;
   }
 
   resetView() {

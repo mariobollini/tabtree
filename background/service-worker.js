@@ -40,7 +40,7 @@ function getFaviconUrl(url) {
 async function createBranch(tabId) {
   const branch = {
     id: generateId(),
-    parentNodeId: null,  // All branches are trunks for now
+    parentNodeId: null,
     tabId,
     createdAt: Date.now(),
     isTrunk: true
@@ -79,6 +79,7 @@ async function createNode(tabId, url, title) {
 
   await addNode(node);
   console.log('Canopy: Created node', node.id, 'for', url);
+
   return node;
 }
 

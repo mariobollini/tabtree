@@ -7,13 +7,13 @@ const NODE_WIDTH = 280;
 const VERTICAL_GAP = 16;
 const HORIZONTAL_GAP = 28;
 const LEFT_MARGIN = 40;
-const HEADER_HEIGHT = 50; // Space for column headers
+const HEADER_HEIGHT = 85; // Space for column headers + summary
 
-export function calculateLayout(data, viewportWidth) {
+export function calculateLayout(data, viewportWidth, openTabIds = new Set()) {
   const { nodes, branches } = data;
 
   if (nodes.length === 0) {
-    return { positionedNodes: [], connections: [], bounds: { width: 0, height: 0 } };
+    return { positionedNodes: [], connections: [], branchHeaders: [], bounds: { width: 0, height: 0 } };
   }
 
   // Sort branches by creation time (oldest first = leftmost)
@@ -79,15 +79,30 @@ export function calculateLayout(data, viewportWidth) {
     const sortedBranchNodes = [...branchNodes].sort((a, b) => a.timestamp - b.timestamp);
     const firstNode = sortedBranchNodes[0];
 
+    // Check if this tab is still open
+    const isOpen = openTabIds.has(branch.tabId);
+
+    // For closed tabs, position header above the most recent (top) node
+    let headerY = 10;
+    if (!isOpen && branchNodes.length > 0) {
+      // Find the most recent node (highest in the tree)
+      const mostRecentNode = [...branchNodes].sort((a, b) => b.timestamp - a.timestamp)[0];
+      const mostRecentNodeY = nodeYPositions.get(mostRecentNode.id);
+      // Position header 10px above the node
+      headerY = mostRecentNodeY - HEADER_HEIGHT - 10;
+    }
+
     return {
       branch,
       x: branchXPositions.get(branch.id),
-      y: 10,
+      y: headerY,
       width: NODE_WIDTH,
       height: HEADER_HEIGHT - 15,
       // Use custom title if set, otherwise use first page title
       title: branch.customTitle || (firstNode?.title) || 'New Tab',
-      isCustom: !!branch.customTitle
+      summary: branch.summary || null,
+      isCustom: !!branch.customTitle,
+      isClosed: !isOpen
     };
   });
 

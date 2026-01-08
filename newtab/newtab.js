@@ -1,6 +1,7 @@
-import { initDB, getTreeData, clearAllData, updateBranchTitle } from '../storage/db.js';
+import { initDB, getTreeData, clearAllData, updateBranchTitle, getNodesByBranch, updateBranchSummary, getAllBranches } from '../storage/db.js';
 import { calculateLayout, compressLayout } from '../tree/layout.js';
 import { TreeRenderer } from '../tree/renderer.js';
+import { initSummarizer, generateSummary, isSummarizerAvailable } from './summarizer.js';
 
 let renderer = null;
 let tooltip = null;
@@ -8,6 +9,9 @@ let editInput = null;
 
 async function init() {
   await initDB();
+
+  // Initialize AI summarizer (fails gracefully if not available)
+  await initSummarizer();
 
   const canvas = document.getElementById('tree-canvas');
   const container = document.getElementById('canvas-container');
@@ -61,12 +65,22 @@ async function init() {
 
 async function loadAndRender() {
   try {
+    // Update summaries first if AI is available
+    await updateAllSummaries();
+
     const data = await getTreeData();
+
+    // Get list of currently open tabs
+    const openTabs = await chrome.tabs.query({});
+    const openTabIds = new Set(openTabs.map(tab => tab.id));
+
     const canvasRect = renderer.canvas.getBoundingClientRect();
 
-    let layout = calculateLayout(data, canvasRect.width);
+    let layout = calculateLayout(data, canvasRect.width, openTabIds);
     layout = compressLayout(layout, canvasRect.width);
 
+    // Pass AI availability info to renderer
+    renderer.setAiAvailable(isSummarizerAvailable());
     renderer.setLayout(layout);
 
     if (layout.positionedNodes.length > 0) {
@@ -74,6 +88,35 @@ async function loadAndRender() {
     }
   } catch (err) {
     console.error('Failed to load tree data:', err);
+  }
+}
+
+async function updateAllSummaries() {
+  if (!isSummarizerAvailable()) return;
+
+  try {
+    const branches = await getAllBranches();
+
+    for (const branch of branches) {
+      // Only update if no summary exists yet (or could check timestamp)
+      if (!branch.summary) {
+        const nodes = await getNodesByBranch(branch.id);
+        if (nodes.length > 0) {
+          nodes.sort((a, b) => a.timestamp - b.timestamp);
+
+          const summary = await generateSummary(nodes.map(n => ({
+            title: n.title,
+            url: n.url
+          })));
+
+          if (summary) {
+            await updateBranchSummary(branch.id, summary);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.log('Canopy: Summary update skipped:', err);
   }
 }
 
