@@ -518,7 +518,7 @@ export class TreeRenderer {
       lastEpochColor = epochColor;
 
       // Draw band line every 15 minutes
-      this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
+      this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
       this.ctx.lineWidth = 1;
       this.ctx.beginPath();
       this.ctx.moveTo(0, bandY);
@@ -562,14 +562,14 @@ export class TreeRenderer {
 
     for (const label of visibleLabels) {
       if (label.type === 'epoch') {
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-        this.ctx.font = '600 11px "Inter", "SF Pro Display", -apple-system, sans-serif';
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        this.ctx.font = '600 14px "Inter", "SF Pro Display", -apple-system, sans-serif';
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'top';
         this.ctx.fillText(label.text, 10, label.y);
       } else if (label.type === 'time') {
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        this.ctx.font = '10px "Inter", "SF Pro Display", -apple-system, sans-serif';
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        this.ctx.font = '12px "Inter", "SF Pro Display", -apple-system, sans-serif';
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(label.text, 10, label.y);
