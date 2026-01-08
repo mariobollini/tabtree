@@ -395,6 +395,8 @@ export class TreeRenderer {
     this.ctx.translate(this.offsetX, this.offsetY);
     this.ctx.scale(this.scale, this.scale);
 
+    // Collect timeline labels for later rendering
+    this.timelineLabels = [];
     this.renderTimelineBackground();
     this.renderBranchRails();
     this.renderConnections();
@@ -403,7 +405,8 @@ export class TreeRenderer {
 
     this.ctx.restore();
 
-    // Render scroll cues in screen space (after restore)
+    // Render time labels and scroll cues in screen space (after restore)
+    this.renderTimelineLabels(width, height);
     this.renderScrollCues(width, height);
   }
 
@@ -495,20 +498,14 @@ export class TreeRenderer {
         this.ctx.fillStyle = lastEpochColor;
         this.ctx.fillRect(0, epochStartY, bounds.width, regionHeight);
 
-        // Draw epoch label on the left
+        // Collect epoch label for later rendering
         if (lastEpochLabel) {
-          this.ctx.save();
-          this.ctx.scale(1 / this.scale, 1 / this.scale);
-          this.ctx.translate(-this.offsetX / this.scale, -this.offsetY / this.scale);
-
           const screenY = epochStartY * this.scale + this.offsetY + 30;
-          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-          this.ctx.font = '11px "Inter", "SF Pro Display", -apple-system, sans-serif';
-          this.ctx.textAlign = 'left';
-          this.ctx.textBaseline = 'top';
-          this.ctx.fillText(lastEpochLabel, 10, screenY);
-
-          this.ctx.restore();
+          this.timelineLabels.push({
+            text: lastEpochLabel,
+            y: screenY,
+            type: 'epoch'
+          });
         }
 
         epochStartY = bandY;
@@ -520,15 +517,15 @@ export class TreeRenderer {
 
       lastEpochColor = epochColor;
 
-      // Draw subtle band line every 15 minutes
-      this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.03)';
+      // Draw band line every 15 minutes
+      this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.08)';
       this.ctx.lineWidth = 1;
       this.ctx.beginPath();
       this.ctx.moveTo(0, bandY);
       this.ctx.lineTo(bounds.width, bandY);
       this.ctx.stroke();
 
-      // Add time label on left for some intervals (every hour)
+      // Collect time label for some intervals (every hour)
       if (i % 4 === 0) {
         const date = new Date(bandTime);
         const timeLabel = date.toLocaleTimeString('en-US', {
@@ -537,18 +534,12 @@ export class TreeRenderer {
           hour12: true
         });
 
-        this.ctx.save();
-        this.ctx.scale(1 / this.scale, 1 / this.scale);
-        this.ctx.translate(-this.offsetX / this.scale, -this.offsetY / this.scale);
-
         const screenY = bandY * this.scale + this.offsetY;
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-        this.ctx.font = '10px "Inter", "SF Pro Display", -apple-system, sans-serif';
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(timeLabel, 10, screenY);
-
-        this.ctx.restore();
+        this.timelineLabels.push({
+          text: timeLabel,
+          y: screenY,
+          type: 'time'
+        });
       }
     }
 
@@ -558,6 +549,31 @@ export class TreeRenderer {
       const regionHeight = lastBandY - epochStartY;
       this.ctx.fillStyle = lastEpochColor;
       this.ctx.fillRect(0, epochStartY, bounds.width, regionHeight);
+    }
+  }
+
+  renderTimelineLabels(width, height) {
+    if (!this.timelineLabels || this.timelineLabels.length === 0) return;
+
+    // Filter to only visible labels
+    const visibleLabels = this.timelineLabels.filter(label =>
+      label.y >= 0 && label.y <= height
+    );
+
+    for (const label of visibleLabels) {
+      if (label.type === 'epoch') {
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+        this.ctx.font = '600 11px "Inter", "SF Pro Display", -apple-system, sans-serif';
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'top';
+        this.ctx.fillText(label.text, 10, label.y);
+      } else if (label.type === 'time') {
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        this.ctx.font = '10px "Inter", "SF Pro Display", -apple-system, sans-serif';
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(label.text, 10, label.y);
+      }
     }
   }
 
@@ -608,15 +624,16 @@ export class TreeRenderer {
     const hasOverflowLeft = leftEdge > 0;
     const hasOverflowRight = rightEdge < bounds.width;
 
-    // Fade effect at edges
+    // Fade effect at edges (skip left edge to preserve time labels)
     const fadeWidth = 60;
-    if (hasOverflowLeft) {
-      const gradient = this.ctx.createLinearGradient(0, 0, fadeWidth, 0);
-      gradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      this.ctx.fillStyle = gradient;
-      this.ctx.fillRect(0, 0, fadeWidth, height);
-    }
+    // Don't fade the left edge where time labels are
+    // if (hasOverflowLeft) {
+    //   const gradient = this.ctx.createLinearGradient(0, 0, fadeWidth, 0);
+    //   gradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    //   gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    //   this.ctx.fillStyle = gradient;
+    //   this.ctx.fillRect(0, 0, fadeWidth, height);
+    // }
 
     if (hasOverflowRight) {
       const gradient = this.ctx.createLinearGradient(width - fadeWidth, 0, width, 0);
@@ -626,19 +643,20 @@ export class TreeRenderer {
       this.ctx.fillRect(width - fadeWidth, 0, fadeWidth, height);
     }
 
-    // Arrow indicators
+    // Arrow indicators (only show right arrow to avoid overlapping with time labels)
     const arrowY = height / 2;
     const arrowSize = 12;
 
-    if (hasOverflowLeft) {
-      this.ctx.fillStyle = this.colors.text + '60';
-      this.ctx.beginPath();
-      this.ctx.moveTo(20, arrowY);
-      this.ctx.lineTo(20 + arrowSize, arrowY - arrowSize);
-      this.ctx.lineTo(20 + arrowSize, arrowY + arrowSize);
-      this.ctx.closePath();
-      this.ctx.fill();
-    }
+    // Left arrow removed to avoid conflict with time labels on left side
+    // if (hasOverflowLeft) {
+    //   this.ctx.fillStyle = this.colors.text + '60';
+    //   this.ctx.beginPath();
+    //   this.ctx.moveTo(20, arrowY);
+    //   this.ctx.lineTo(20 + arrowSize, arrowY - arrowSize);
+    //   this.ctx.lineTo(20 + arrowSize, arrowY + arrowSize);
+    //   this.ctx.closePath();
+    //   this.ctx.fill();
+    // }
 
     if (hasOverflowRight) {
       this.ctx.fillStyle = this.colors.text + '60';
