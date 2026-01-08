@@ -1,26 +1,31 @@
-import { initDB, getTreeData, clearAllData } from '../storage/db.js';
+import { initDB, getTreeData, clearAllData, updateBranchTitle } from '../storage/db.js';
 import { calculateLayout, compressLayout } from '../tree/layout.js';
 import { TreeRenderer } from '../tree/renderer.js';
 
 let renderer = null;
 let tooltip = null;
+let editInput = null;
 
 async function init() {
-  // Initialize database
   await initDB();
 
-  // Get DOM elements
   const canvas = document.getElementById('tree-canvas');
   const container = document.getElementById('canvas-container');
   tooltip = document.getElementById('tooltip');
 
-  // Initialize renderer
+  // Create inline edit input
+  editInput = document.createElement('input');
+  editInput.type = 'text';
+  editInput.id = 'edit-input';
+  editInput.className = 'hidden';
+  document.body.appendChild(editInput);
+
   renderer = new TreeRenderer(canvas, {
     onNodeClick: handleNodeClick,
-    onNodeHover: handleNodeHover
+    onNodeHover: handleNodeHover,
+    onHeaderClick: handleHeaderClick
   });
 
-  // Set up resize handling
   function handleResize() {
     const rect = container.getBoundingClientRect();
     renderer.resize(rect.width, rect.height);
@@ -30,7 +35,6 @@ async function init() {
   window.addEventListener('resize', handleResize);
   handleResize();
 
-  // Set up control buttons
   document.getElementById('btn-reset').addEventListener('click', () => {
     renderer.resetView();
   });
@@ -46,10 +50,8 @@ async function init() {
     }
   });
 
-  // Initial load
   await loadAndRender();
 
-  // Track mouse for tooltip positioning
   document.addEventListener('mousemove', (e) => {
     if (!tooltip.classList.contains('hidden')) {
       positionTooltip(e.clientX, e.clientY);
@@ -62,17 +64,13 @@ async function loadAndRender() {
     const data = await getTreeData();
     const canvasRect = renderer.canvas.getBoundingClientRect();
 
-    // Calculate layout
     let layout = calculateLayout(data, canvasRect.width);
-
-    // Compress if needed
     layout = compressLayout(layout, canvasRect.width);
 
     renderer.setLayout(layout);
 
-    // Fit to view on initial load if there's content
     if (layout.positionedNodes.length > 0) {
-      renderer.fitToView();
+      renderer.fitToWidth();
     }
   } catch (err) {
     console.error('Failed to load tree data:', err);
@@ -81,7 +79,6 @@ async function loadAndRender() {
 
 function handleNodeClick(node) {
   if (node && node.url) {
-    // Navigate to the URL in the current tab
     window.location.href = node.url;
   }
 }
@@ -92,6 +89,62 @@ function handleNodeHover(node) {
   } else {
     hideTooltip();
   }
+}
+
+function handleHeaderClick(header) {
+  showEditInput(header);
+}
+
+function showEditInput(header) {
+  const canvas = renderer.canvas;
+  const canvasRect = canvas.getBoundingClientRect();
+
+  // Convert world coordinates to screen coordinates
+  const screenX = header.x * renderer.scale + renderer.offsetX + canvasRect.left;
+  const screenY = header.y * renderer.scale + renderer.offsetY + canvasRect.top;
+  const screenWidth = header.width * renderer.scale;
+  const screenHeight = header.height * renderer.scale;
+
+  editInput.value = header.title;
+  editInput.style.left = `${screenX}px`;
+  editInput.style.top = `${screenY}px`;
+  editInput.style.width = `${screenWidth}px`;
+  editInput.style.height = `${screenHeight}px`;
+  editInput.style.fontSize = `${17 * renderer.scale}px`;
+  editInput.classList.remove('hidden');
+  editInput.focus();
+  editInput.select();
+
+  const branchId = header.branch.id;
+
+  async function saveAndClose() {
+    const newTitle = editInput.value.trim();
+    if (newTitle && newTitle !== header.title) {
+      await updateBranchTitle(branchId, newTitle);
+      await loadAndRender();
+    }
+    editInput.classList.add('hidden');
+    editInput.removeEventListener('blur', handleBlur);
+    editInput.removeEventListener('keydown', handleKeydown);
+  }
+
+  function handleBlur() {
+    saveAndClose();
+  }
+
+  function handleKeydown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveAndClose();
+    } else if (e.key === 'Escape') {
+      editInput.classList.add('hidden');
+      editInput.removeEventListener('blur', handleBlur);
+      editInput.removeEventListener('keydown', handleKeydown);
+    }
+  }
+
+  editInput.addEventListener('blur', handleBlur);
+  editInput.addEventListener('keydown', handleKeydown);
 }
 
 function showTooltip(node) {
@@ -115,7 +168,6 @@ function positionTooltip(x, y) {
   let left = x + padding;
   let top = y + padding;
 
-  // Keep tooltip in viewport
   if (left + rect.width > window.innerWidth) {
     left = x - rect.width - padding;
   }
@@ -133,7 +185,6 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-// Start the app
 init().catch(err => {
   console.error('Failed to initialize Canopy:', err);
 });

@@ -2,11 +2,12 @@
 // Converts raw nodes/branches data into positioned elements for rendering
 // Layout: vertical timeline (newest at top), each branch is a vertical column
 
-const NODE_HEIGHT = 50;
-const NODE_WIDTH = 220;
-const VERTICAL_GAP = 15;
-const HORIZONTAL_GAP = 40;
-const LEFT_MARGIN = 30;
+const NODE_HEIGHT = 60;
+const NODE_WIDTH = 280;
+const VERTICAL_GAP = 16;
+const HORIZONTAL_GAP = 28;
+const LEFT_MARGIN = 40;
+const HEADER_HEIGHT = 50; // Space for column headers
 
 export function calculateLayout(data, viewportWidth) {
   const { nodes, branches } = data;
@@ -37,9 +38,10 @@ export function calculateLayout(data, viewportWidth) {
   const sortedNodes = [...nodes].sort((a, b) => b.timestamp - a.timestamp);
 
   // Assign Y positions based on chronological order (newest at top)
+  // Add HEADER_HEIGHT to leave room for column titles
   const nodeYPositions = new Map();
   sortedNodes.forEach((node, index) => {
-    nodeYPositions.set(node.id, VERTICAL_GAP + index * (NODE_HEIGHT + VERTICAL_GAP));
+    nodeYPositions.set(node.id, HEADER_HEIGHT + VERTICAL_GAP + index * (NODE_HEIGHT + VERTICAL_GAP));
   });
 
   // Build positioned nodes
@@ -70,15 +72,35 @@ export function calculateLayout(data, viewportWidth) {
     }
   }
 
+  // Build branch headers with positions
+  const branchHeaders = sortedBranches.map(branch => {
+    const branchNodes = nodesByBranch.get(branch.id) || [];
+    // Sort by timestamp to get the first (oldest) node for default title
+    const sortedBranchNodes = [...branchNodes].sort((a, b) => a.timestamp - b.timestamp);
+    const firstNode = sortedBranchNodes[0];
+
+    return {
+      branch,
+      x: branchXPositions.get(branch.id),
+      y: 10,
+      width: NODE_WIDTH,
+      height: HEADER_HEIGHT - 15,
+      // Use custom title if set, otherwise use first page title
+      title: branch.customTitle || (firstNode?.title) || 'New Tab',
+      isCustom: !!branch.customTitle
+    };
+  });
+
   // Calculate bounds
   const maxX = sortedBranches.length > 0
     ? LEFT_MARGIN + sortedBranches.length * (NODE_WIDTH + HORIZONTAL_GAP)
     : viewportWidth;
-  const maxY = VERTICAL_GAP + sortedNodes.length * (NODE_HEIGHT + VERTICAL_GAP);
+  const maxY = HEADER_HEIGHT + VERTICAL_GAP + sortedNodes.length * (NODE_HEIGHT + VERTICAL_GAP);
 
   return {
     positionedNodes,
     connections,
+    branchHeaders,
     bounds: {
       width: Math.max(maxX, viewportWidth),
       height: maxY + VERTICAL_GAP
@@ -88,7 +110,7 @@ export function calculateLayout(data, viewportWidth) {
 
 // Compress layout to fit viewport while maintaining readability
 export function compressLayout(layout, viewportWidth, minNodeWidth = 150) {
-  const { positionedNodes, connections, bounds } = layout;
+  const { positionedNodes, connections, branchHeaders, bounds } = layout;
 
   if (bounds.width <= viewportWidth || positionedNodes.length === 0) {
     return layout;
@@ -99,16 +121,24 @@ export function compressLayout(layout, viewportWidth, minNodeWidth = 150) {
   const contentWidth = bounds.width - (LEFT_MARGIN * 2);
   const ratio = Math.max(0.5, availableWidth / contentWidth); // Don't compress too much
 
-  // Apply compression
+  // Apply compression to nodes
   const compressedNodes = positionedNodes.map(pos => ({
     ...pos,
     x: LEFT_MARGIN + (pos.x - LEFT_MARGIN) * ratio,
     width: Math.max(pos.width * ratio, minNodeWidth)
   }));
 
+  // Apply compression to headers
+  const compressedHeaders = branchHeaders.map(header => ({
+    ...header,
+    x: LEFT_MARGIN + (header.x - LEFT_MARGIN) * ratio,
+    width: Math.max(header.width * ratio, minNodeWidth)
+  }));
+
   return {
     positionedNodes: compressedNodes,
     connections,
+    branchHeaders: compressedHeaders,
     bounds: {
       width: viewportWidth,
       height: bounds.height

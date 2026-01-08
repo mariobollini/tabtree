@@ -19,59 +19,43 @@ export class TreeRenderer {
     // Data
     this.layout = null;
     this.hoveredNode = null;
+    this.hoveredHeader = null;
+
+    // Favicon cache
+    this.faviconCache = new Map();
 
     // Callbacks
     this.onNodeClick = options.onNodeClick || null;
     this.onNodeHover = options.onNodeHover || null;
+    this.onHeaderClick = options.onHeaderClick || null;
 
-    // Colors (respect system preference)
-    this.isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    this.colors = this.getColors();
+    // Light minimalist colors
+    this.colors = {
+      background: '#ffffff',
+      nodeBg: '#ffffff',
+      nodeBorder: '#e5e5e5',
+      nodeHover: '#fafafa',
+      text: '#222222',
+      textSecondary: '#888888',
+      timestamp: '#aaaaaa'
+    };
 
-    // Set up event listeners
+    // Softer, more elegant branch colors
+    this.branchColors = [
+      '#5B8DEF', // soft blue
+      '#6FCF97', // soft green
+      '#F2994A', // soft orange
+      '#BB6BD9', // soft purple
+      '#EB5757', // soft red
+      '#56CCF2', // sky blue
+      '#F2C94C', // soft yellow
+      '#9B51E0'  // violet
+    ];
+
     this.setupEventListeners();
-
-    // Watch for color scheme changes
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      this.isDarkMode = e.matches;
-      this.colors = this.getColors();
-      this.render();
-    });
-  }
-
-  getColors() {
-    // Branch colors for visual distinction
-    this.branchColors = this.isDarkMode
-      ? ['#e94560', '#4ecdc4', '#ffe66d', '#95e1d3', '#f38181', '#aa96da', '#fcbad3', '#a8d8ea']
-      : ['#007bff', '#28a745', '#dc3545', '#fd7e14', '#6f42c1', '#20c997', '#e83e8c', '#17a2b8'];
-
-    if (this.isDarkMode) {
-      return {
-        background: '#1a1a2e',
-        nodeBg: '#16213e',
-        nodeBorder: '#0f3460',
-        nodeHover: '#1f4287',
-        text: '#e8e8e8',
-        textSecondary: '#a0a0a0',
-        connection: '#4a5568',
-        branchRail: 'rgba(255, 255, 255, 0.05)'
-      };
-    } else {
-      return {
-        background: '#f8f9fa',
-        nodeBg: '#ffffff',
-        nodeBorder: '#dee2e6',
-        nodeHover: '#e9ecef',
-        text: '#212529',
-        textSecondary: '#6c757d',
-        connection: '#6c757d',
-        branchRail: 'rgba(0, 0, 0, 0.03)'
-      };
-    }
   }
 
   getBranchColor(branchId) {
-    // Get a consistent color for each branch
     if (!this._branchColorMap) {
       this._branchColorMap = new Map();
     }
@@ -82,20 +66,53 @@ export class TreeRenderer {
     return this._branchColorMap.get(branchId);
   }
 
+  // Format relative time
+  formatRelativeTime(timestamp) {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (seconds < 60) return 'just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days === 1) return 'yesterday';
+    if (days < 7) return `${days}d ago`;
+    return new Date(timestamp).toLocaleDateString();
+  }
+
+  loadFavicon(url) {
+    if (!url) return null;
+    if (this.faviconCache.has(url)) {
+      return this.faviconCache.get(url);
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    this.faviconCache.set(url, { loading: true, img: null });
+
+    img.onload = () => {
+      this.faviconCache.set(url, { loading: false, img });
+      this.render();
+    };
+
+    img.onerror = () => {
+      this.faviconCache.set(url, { loading: false, img: null });
+    };
+
+    img.src = url;
+    return { loading: true, img: null };
+  }
+
   setupEventListeners() {
-    // Mouse events for pan
     this.canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
     this.canvas.addEventListener('mousemove', this.handleMouseMove.bind(this));
     this.canvas.addEventListener('mouseup', this.handleMouseUp.bind(this));
     this.canvas.addEventListener('mouseleave', this.handleMouseUp.bind(this));
-
-    // Wheel event for zoom
     this.canvas.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
-
-    // Click event for node selection
     this.canvas.addEventListener('click', this.handleClick.bind(this));
-
-    // Touch events for mobile
     this.canvas.addEventListener('touchstart', this.handleTouchStart.bind(this), { passive: false });
     this.canvas.addEventListener('touchmove', this.handleTouchMove.bind(this), { passive: false });
     this.canvas.addEventListener('touchend', this.handleTouchEnd.bind(this));
@@ -112,10 +129,16 @@ export class TreeRenderer {
 
   setLayout(layout) {
     this.layout = layout;
+    if (layout && layout.positionedNodes) {
+      for (const pos of layout.positionedNodes) {
+        if (pos.node.favicon) {
+          this.loadFavicon(pos.node.favicon);
+        }
+      }
+    }
     this.render();
   }
 
-  // Transform screen coordinates to world coordinates
   screenToWorld(screenX, screenY) {
     return {
       x: (screenX - this.offsetX) / this.scale,
@@ -123,20 +146,9 @@ export class TreeRenderer {
     };
   }
 
-  // Transform world coordinates to screen coordinates
-  worldToScreen(worldX, worldY) {
-    return {
-      x: worldX * this.scale + this.offsetX,
-      y: worldY * this.scale + this.offsetY
-    };
-  }
-
-  // Find node at position
   getNodeAtPosition(screenX, screenY) {
     if (!this.layout) return null;
-
     const world = this.screenToWorld(screenX, screenY);
-
     for (const pos of this.layout.positionedNodes) {
       if (
         world.x >= pos.x &&
@@ -150,7 +162,22 @@ export class TreeRenderer {
     return null;
   }
 
-  // Event handlers
+  getHeaderAtPosition(screenX, screenY) {
+    if (!this.layout || !this.layout.branchHeaders) return null;
+    const world = this.screenToWorld(screenX, screenY);
+    for (const header of this.layout.branchHeaders) {
+      if (
+        world.x >= header.x &&
+        world.x <= header.x + header.width &&
+        world.y >= header.y &&
+        world.y <= header.y + header.height
+      ) {
+        return header;
+      }
+    }
+    return null;
+  }
+
   handleMouseDown(e) {
     this.isDragging = true;
     this.lastMouseX = e.clientX;
@@ -172,60 +199,73 @@ export class TreeRenderer {
       this.lastMouseY = e.clientY;
       this.render();
     } else {
-      // Check for hover
       const node = this.getNodeAtPosition(x, y);
+      const header = this.getHeaderAtPosition(x, y);
+
+      let needsRender = false;
+
       if (node !== this.hoveredNode) {
         this.hoveredNode = node;
-        this.canvas.style.cursor = node ? 'pointer' : 'grab';
-        this.render();
+        needsRender = true;
         if (this.onNodeHover) {
           this.onNodeHover(node?.node || null);
         }
+      }
+
+      if (header !== this.hoveredHeader) {
+        this.hoveredHeader = header;
+        needsRender = true;
+      }
+
+      this.canvas.style.cursor = (node || header) ? 'pointer' : 'default';
+
+      if (needsRender) {
+        this.render();
       }
     }
   }
 
   handleMouseUp() {
     this.isDragging = false;
-    this.canvas.style.cursor = this.hoveredNode ? 'pointer' : 'grab';
+    this.canvas.style.cursor = (this.hoveredNode || this.hoveredHeader) ? 'pointer' : 'default';
   }
 
   handleWheel(e) {
     e.preventDefault();
 
-    const rect = this.canvas.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
+    // Scroll vertically through time (like a normal page)
+    // Scrolling down = go back in time (move view down)
+    const scrollSpeed = 1.5;
+    this.offsetY -= e.deltaY * scrollSpeed;
 
-    // Zoom towards mouse position
-    const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.1, Math.min(3, this.scale * zoomFactor));
-
-    // Adjust offset to zoom towards mouse
-    const worldBefore = this.screenToWorld(mouseX, mouseY);
-    this.scale = newScale;
-    const worldAfter = this.screenToWorld(mouseX, mouseY);
-
-    this.offsetX += (worldAfter.x - worldBefore.x) * this.scale;
-    this.offsetY += (worldAfter.y - worldBefore.y) * this.scale;
+    // Clamp to reasonable bounds
+    if (this.layout) {
+      const viewHeight = this.canvas.height / this.dpr;
+      const maxScroll = 50; // Allow some overscroll at top
+      const minScroll = -(this.layout.bounds.height * this.scale - viewHeight + 100);
+      this.offsetY = Math.min(maxScroll, Math.max(minScroll, this.offsetY));
+    }
 
     this.render();
   }
 
   handleClick(e) {
-    if (!this.onNodeClick) return;
-
     const rect = this.canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    const header = this.getHeaderAtPosition(x, y);
+    if (header && this.onHeaderClick) {
+      this.onHeaderClick(header);
+      return;
+    }
+
     const node = this.getNodeAtPosition(x, y);
-    if (node) {
+    if (node && this.onNodeClick) {
       this.onNodeClick(node.node);
     }
   }
 
-  // Touch handlers
   handleTouchStart(e) {
     if (e.touches.length === 1) {
       e.preventDefault();
@@ -252,12 +292,10 @@ export class TreeRenderer {
     this.isDragging = false;
   }
 
-  // Rendering
   render() {
     const width = this.canvas.width / this.dpr;
     const height = this.canvas.height / this.dpr;
 
-    // Clear canvas
     this.ctx.fillStyle = this.colors.background;
     this.ctx.fillRect(0, 0, width, height);
 
@@ -266,19 +304,14 @@ export class TreeRenderer {
       return;
     }
 
-    // Save context and apply transform
     this.ctx.save();
     this.ctx.translate(this.offsetX, this.offsetY);
     this.ctx.scale(this.scale, this.scale);
 
-    // Draw branch rails (vertical background stripes)
     this.renderBranchRails();
-
-    // Draw connections (behind nodes)
     this.renderConnections();
-
-    // Draw nodes
     this.renderNodes();
+    this.renderHeaders();
 
     this.ctx.restore();
   }
@@ -286,7 +319,6 @@ export class TreeRenderer {
   renderBranchRails() {
     if (!this.layout || this.layout.positionedNodes.length === 0) return;
 
-    // Group nodes by branch to find branch columns
     const branchColumns = new Map();
     for (const pos of this.layout.positionedNodes) {
       const branchId = pos.node.branchId;
@@ -299,22 +331,18 @@ export class TreeRenderer {
       }
     }
 
-    // Draw a subtle vertical rail for each branch
     for (const [branchId, col] of branchColumns) {
       const color = this.getBranchColor(branchId);
-      this.ctx.fillStyle = color + '15'; // 15 = ~8% opacity in hex
-      this.ctx.fillRect(
-        col.x - 5,
-        col.minY - 10,
-        col.width + 10,
-        col.maxY - col.minY + 20
-      );
+      this.ctx.fillStyle = color + '08';
+      this.ctx.beginPath();
+      this.ctx.roundRect(col.x - 10, col.minY - 20, col.width + 20, col.maxY - col.minY + 40, 12);
+      this.ctx.fill();
     }
   }
 
   renderEmptyState(width, height) {
     this.ctx.fillStyle = this.colors.textSecondary;
-    this.ctx.font = '16px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    this.ctx.font = '20px "Inter", "SF Pro Display", -apple-system, sans-serif';
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.ctx.fillText('Start browsing to see your history tree', width / 2, height / 2);
@@ -323,16 +351,13 @@ export class TreeRenderer {
   renderConnections() {
     for (const conn of this.layout.connections) {
       const { from, to } = conn;
-
-      // Use branch color for connections
       const branchColor = this.getBranchColor(to.node.branchId);
 
       this.ctx.beginPath();
-      this.ctx.strokeStyle = branchColor;
-      this.ctx.lineWidth = 3;
+      this.ctx.strokeStyle = branchColor + '40';
+      this.ctx.lineWidth = 2;
       this.ctx.lineCap = 'round';
 
-      // Draw line from bottom of parent to top of child
       const startX = from.x + from.width / 2;
       const startY = from.y + from.height;
       const endX = to.x + to.width / 2;
@@ -344,6 +369,45 @@ export class TreeRenderer {
     }
   }
 
+  renderHeaders() {
+    if (!this.layout.branchHeaders) return;
+
+    for (const header of this.layout.branchHeaders) {
+      this.renderHeader(header);
+    }
+  }
+
+  renderHeader(header) {
+    const { branch, x, y, width, height, title } = header;
+    const isHovered = this.hoveredHeader === header;
+    const branchColor = this.getBranchColor(branch.id);
+
+    // Header text
+    this.ctx.fillStyle = isHovered ? branchColor : this.colors.text;
+    this.ctx.font = `600 17px "Inter", "SF Pro Display", -apple-system, sans-serif`;
+    this.ctx.textAlign = 'left';
+    this.ctx.textBaseline = 'middle';
+
+    const maxWidth = width - 30;
+    const displayTitle = this.truncateText(title, maxWidth);
+    this.ctx.fillText(displayTitle, x + 4, y + height / 2);
+
+    // Edit hint on hover
+    if (isHovered) {
+      this.ctx.fillStyle = this.colors.textSecondary;
+      this.ctx.font = `13px "Inter", "SF Pro Display", -apple-system, sans-serif`;
+      this.ctx.fillText('click to edit', x + 4, y + height / 2 + 18);
+    }
+
+    // Colored underline
+    this.ctx.strokeStyle = branchColor + '60';
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + 4, y + height - 2);
+    this.ctx.lineTo(x + Math.min(this.ctx.measureText(displayTitle).width + 4, width - 20), y + height - 2);
+    this.ctx.stroke();
+  }
+
   renderNodes() {
     for (const pos of this.layout.positionedNodes) {
       this.renderNode(pos);
@@ -353,76 +417,105 @@ export class TreeRenderer {
   renderNode(pos) {
     const { node, x, y, width, height } = pos;
     const isHovered = this.hoveredNode === pos;
-    const padding = 8;
-    const iconSize = 24;
-    const borderRadius = 8;
+    const padding = 14;
+    const iconSize = 22;
+    const borderRadius = 12;
     const accentWidth = 4;
 
-    // Get branch color for accent
     const branchColor = this.getBranchColor(node.branchId);
+
+    // Shadow on hover
+    if (isHovered) {
+      this.ctx.shadowColor = 'rgba(0, 0, 0, 0.06)';
+      this.ctx.shadowBlur = 16;
+      this.ctx.shadowOffsetY = 4;
+    }
 
     // Node background
     this.ctx.fillStyle = isHovered ? this.colors.nodeHover : this.colors.nodeBg;
     this.ctx.strokeStyle = this.colors.nodeBorder;
     this.ctx.lineWidth = 1;
 
-    this.roundRect(x, y, width, height, borderRadius);
+    this.ctx.beginPath();
+    this.ctx.roundRect(x, y, width, height, borderRadius);
     this.ctx.fill();
     this.ctx.stroke();
+
+    // Reset shadow
+    this.ctx.shadowColor = 'transparent';
+    this.ctx.shadowBlur = 0;
+    this.ctx.shadowOffsetY = 0;
 
     // Colored left accent bar
     this.ctx.fillStyle = branchColor;
     this.ctx.beginPath();
-    this.ctx.moveTo(x + accentWidth, y);
-    this.ctx.lineTo(x, y);
-    this.ctx.quadraticCurveTo(x, y, x, y + borderRadius);
-    this.ctx.lineTo(x, y + height - borderRadius);
-    this.ctx.quadraticCurveTo(x, y + height, x + accentWidth, y + height);
-    this.ctx.closePath();
+    this.ctx.roundRect(x, y, accentWidth, height, [borderRadius, 0, 0, borderRadius]);
     this.ctx.fill();
 
-    // Favicon placeholder
-    this.ctx.fillStyle = this.colors.nodeBorder;
-    this.ctx.fillRect(x + accentWidth + padding, y + (height - iconSize) / 2, iconSize, iconSize);
+    // Favicon
+    const iconX = x + accentWidth + padding;
+    const iconY = y + (height - iconSize) / 2;
 
-    // Title
+    const cached = node.favicon ? this.faviconCache.get(node.favicon) : null;
+    if (cached && cached.img && !cached.loading) {
+      this.ctx.save();
+      this.ctx.beginPath();
+      this.ctx.roundRect(iconX, iconY, iconSize, iconSize, 5);
+      this.ctx.clip();
+      this.ctx.drawImage(cached.img, iconX, iconY, iconSize, iconSize);
+      this.ctx.restore();
+    } else {
+      this.ctx.fillStyle = branchColor + '18';
+      this.ctx.beginPath();
+      this.ctx.roundRect(iconX, iconY, iconSize, iconSize, 5);
+      this.ctx.fill();
+
+      try {
+        const domain = new URL(node.url).hostname.replace('www.', '');
+        const letter = domain.charAt(0).toUpperCase();
+        this.ctx.fillStyle = branchColor;
+        this.ctx.font = `600 ${iconSize * 0.55}px "Inter", "SF Pro Display", -apple-system, sans-serif`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(letter, iconX + iconSize / 2, iconY + iconSize / 2);
+      } catch {}
+    }
+
+    // Timestamp (right side)
+    const timestamp = this.formatRelativeTime(node.timestamp);
+    this.ctx.fillStyle = this.colors.timestamp;
+    this.ctx.font = '13px "Inter", "SF Pro Display", -apple-system, sans-serif';
+    this.ctx.textAlign = 'right';
+    this.ctx.textBaseline = 'middle';
+    const timestampX = x + width - padding;
+    this.ctx.fillText(timestamp, timestampX, y + height / 2);
+
+    // Title (left side, after favicon, before timestamp)
+    const timestampWidth = this.ctx.measureText(timestamp).width + 12;
+    const titleX = iconX + iconSize + 12;
+    const maxTitleWidth = width - accentWidth - padding * 2 - iconSize - 12 - timestampWidth;
+
     this.ctx.fillStyle = this.colors.text;
-    this.ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    this.ctx.font = '16px "Inter", "SF Pro Display", -apple-system, sans-serif';
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'middle';
 
-    const titleX = x + accentWidth + padding + iconSize + 8;
-    const maxTitleWidth = width - accentWidth - padding * 2 - iconSize - 8;
     const title = this.truncateText(node.title || node.url, maxTitleWidth);
     this.ctx.fillText(title, titleX, y + height / 2);
   }
 
-  roundRect(x, y, width, height, radius) {
-    this.ctx.beginPath();
-    this.ctx.moveTo(x + radius, y);
-    this.ctx.lineTo(x + width - radius, y);
-    this.ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-    this.ctx.lineTo(x + width, y + height - radius);
-    this.ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-    this.ctx.lineTo(x + radius, y + height);
-    this.ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-    this.ctx.lineTo(x, y + radius);
-    this.ctx.quadraticCurveTo(x, y, x + radius, y);
-    this.ctx.closePath();
-  }
-
   truncateText(text, maxWidth) {
+    if (!text) return '';
     const measured = this.ctx.measureText(text);
     if (measured.width <= maxWidth) return text;
 
     let truncated = text;
-    while (truncated.length > 0 && this.ctx.measureText(truncated + '...').width > maxWidth) {
+    while (truncated.length > 0 && this.ctx.measureText(truncated + '…').width > maxWidth) {
       truncated = truncated.slice(0, -1);
     }
-    return truncated + '...';
+    return truncated + '…';
   }
 
-  // Reset view to default
   resetView() {
     this.scale = 1;
     this.offsetX = 0;
@@ -430,7 +523,25 @@ export class TreeRenderer {
     this.render();
   }
 
-  // Fit all content in view
+  // Fit content to width and position at top (for initial view)
+  fitToWidth() {
+    if (!this.layout || this.layout.positionedNodes.length === 0) return;
+
+    const width = this.canvas.width / this.dpr;
+    const { bounds } = this.layout;
+
+    // Scale to fit width, but not smaller than 0.7 and not larger than 1
+    const scaleX = (width - 60) / bounds.width;
+    this.scale = Math.min(Math.max(scaleX, 0.7), 1);
+
+    // Center horizontally, start at top
+    this.offsetX = (width - bounds.width * this.scale) / 2;
+    this.offsetY = 30;
+
+    this.render();
+  }
+
+  // Fit all content in view (for "Fit" button)
   fitToView() {
     if (!this.layout || this.layout.positionedNodes.length === 0) return;
 
@@ -438,12 +549,12 @@ export class TreeRenderer {
     const height = this.canvas.height / this.dpr;
     const { bounds } = this.layout;
 
-    const scaleX = (width - 40) / bounds.width;
-    const scaleY = (height - 40) / bounds.height;
+    const scaleX = (width - 80) / bounds.width;
+    const scaleY = (height - 80) / bounds.height;
     this.scale = Math.min(scaleX, scaleY, 1);
 
     this.offsetX = (width - bounds.width * this.scale) / 2;
-    this.offsetY = 20;
+    this.offsetY = 40;
 
     this.render();
   }

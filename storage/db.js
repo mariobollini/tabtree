@@ -161,6 +161,27 @@ export async function getBranchByTabId(tabId) {
   });
 }
 
+export async function updateBranchTitle(branchId, customTitle) {
+  const database = await initDB();
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(['branches'], 'readwrite');
+    const store = transaction.objectStore('branches');
+    const getRequest = store.get(branchId);
+    getRequest.onsuccess = () => {
+      const branch = getRequest.result;
+      if (branch) {
+        branch.customTitle = customTitle;
+        const putRequest = store.put(branch);
+        putRequest.onsuccess = () => resolve(branch);
+        putRequest.onerror = () => reject(putRequest.error);
+      } else {
+        reject(new Error('Branch not found'));
+      }
+    };
+    getRequest.onerror = () => reject(getRequest.error);
+  });
+}
+
 // Tab mapping operations
 export async function setTabMapping(tabId, branchId) {
   const database = await initDB();

@@ -5,34 +5,23 @@
 }
 
 :root {
-  --bg-color: #f8f9fa;
+  --bg-color: #ffffff;
   --header-bg: #ffffff;
-  --text-color: #212529;
-  --text-secondary: #6c757d;
-  --border-color: #dee2e6;
-  --button-bg: #e9ecef;
-  --button-hover: #dee2e6;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-color: #1a1a2e;
-    --header-bg: #16213e;
-    --text-color: #e8e8e8;
-    --text-secondary: #a0a0a0;
-    --border-color: #0f3460;
-    --button-bg: #0f3460;
-    --button-hover: #1f4287;
-  }
+  --text-color: #333333;
+  --text-secondary: #888888;
+  --border-color: #eeeeee;
+  --button-bg: #fafafa;
+  --button-hover: #f0f0f0;
 }
 
 html, body {
   height: 100%;
   width: 100%;
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: "Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background-color: var(--bg-color);
   color: var(--text-color);
+  -webkit-font-smoothing: antialiased;
 }
 
 #app {
@@ -46,46 +35,49 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 20px;
+  padding: 16px 24px;
   background-color: var(--header-bg);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
 }
 
 #header h1 {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 500;
   color: var(--text-color);
+  letter-spacing: -0.3px;
 }
 
 #controls {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 #controls button {
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 450;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-radius: 8px;
   background-color: var(--button-bg);
   color: var(--text-color);
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 #controls button:hover {
   background-color: var(--button-hover);
+  border-color: #ddd;
 }
 
 #btn-clear {
-  color: #dc3545;
+  color: #cc4444;
 }
 
 #btn-clear:hover {
-  background-color: #dc3545;
+  background-color: #cc4444;
   color: white;
-  border-color: #dc3545;
+  border-color: #cc4444;
 }
 
 #canvas-container {
@@ -96,25 +88,21 @@ html, body {
 
 #tree-canvas {
   display: block;
-  cursor: grab;
-}
-
-#tree-canvas:active {
-  cursor: grabbing;
+  cursor: default;
 }
 
 #tooltip {
   position: fixed;
-  padding: 8px 12px;
-  background-color: var(--header-bg);
+  padding: 12px 16px;
+  background-color: white;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  font-size: 12px;
+  border-radius: 10px;
+  font-size: 13px;
   color: var(--text-color);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   pointer-events: none;
   z-index: 1000;
-  max-width: 300px;
+  max-width: 320px;
   word-wrap: break-word;
 }
 
@@ -123,17 +111,36 @@ html, body {
 }
 
 #tooltip .tooltip-title {
-  font-weight: 600;
-  margin-bottom: 4px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  font-size: 14px;
 }
 
 #tooltip .tooltip-url {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 #tooltip .tooltip-time {
   color: var(--text-secondary);
-  font-size: 11px;
-  margin-top: 4px;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+#edit-input {
+  position: fixed;
+  padding: 4px 8px;
+  font-family: "Inter", "SF Pro Display", -apple-system, sans-serif;
+  font-weight: 600;
+  border: 2px solid #5B8DEF;
+  border-radius: 6px;
+  background: white;
+  color: var(--text-color);
+  outline: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  z-index: 1001;
+}
+
+#edit-input.hidden {
+  display: none;
 }
