@@ -395,6 +395,7 @@ export class TreeRenderer {
     this.ctx.translate(this.offsetX, this.offsetY);
     this.ctx.scale(this.scale, this.scale);
 
+    this.renderTimelineBackground();
     this.renderBranchRails();
     this.renderConnections();
     this.renderNodes();
@@ -404,6 +405,160 @@ export class TreeRenderer {
 
     // Render scroll cues in screen space (after restore)
     this.renderScrollCues(width, height);
+  }
+
+  renderTimelineBackground() {
+    if (!this.layout || this.layout.positionedNodes.length === 0) return;
+
+    const width = this.canvas.width / this.dpr;
+    const height = this.canvas.height / this.dpr;
+    const { bounds } = this.layout;
+
+    // Find time range from nodes
+    const timestamps = this.layout.positionedNodes.map(pos => pos.node.timestamp);
+    const mostRecent = Math.max(...timestamps);
+    const oldest = Math.min(...timestamps);
+
+    const now = Date.now();
+    const startTime = mostRecent;
+
+    // Calculate Y position for a given timestamp
+    const getYForTime = (timestamp) => {
+      // Find nodes at or near this time to get Y position
+      const closestNode = this.layout.positionedNodes.reduce((closest, pos) => {
+        const timeDiff = Math.abs(pos.node.timestamp - timestamp);
+        const closestDiff = Math.abs(closest.node.timestamp - timestamp);
+        return timeDiff < closestDiff ? pos : closest;
+      });
+      return closestNode.y;
+    };
+
+    // 15 minute intervals
+    const intervalMs = 15 * 60 * 1000;
+    const timeSpan = startTime - oldest;
+    const numIntervals = Math.ceil(timeSpan / intervalMs);
+
+    // Define epochs for gradient changes
+    const oneHourAgo = now - (60 * 60 * 1000);
+    const oneDayAgo = now - (24 * 60 * 60 * 1000);
+    const oneWeekAgo = now - (7 * 24 * 60 * 60 * 1000);
+
+    // Helper to get epoch color (lighter = more recent)
+    const getEpochColor = (timestamp) => {
+      if (timestamp > oneHourAgo) {
+        return 'rgba(0, 0, 0, 0.01)'; // Very light, almost white
+      } else if (timestamp > oneDayAgo) {
+        return 'rgba(0, 0, 0, 0.02)'; // Slightly darker
+      } else if (timestamp > oneWeekAgo) {
+        return 'rgba(0, 0, 0, 0.035)'; // Medium
+      } else {
+        return 'rgba(0, 0, 0, 0.05)'; // Darker for older
+      }
+    };
+
+    // Get epoch label
+    const getEpochLabel = (timestamp) => {
+      const diffMs = now - timestamp;
+      const diffMinutes = Math.floor(diffMs / (60 * 1000));
+      const diffHours = Math.floor(diffMs / (60 * 60 * 1000));
+      const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+
+      if (diffMinutes < 60) {
+        return 'Recent';
+      } else if (diffHours < 24) {
+        return 'Today';
+      } else if (diffDays === 1) {
+        return 'Yesterday';
+      } else if (diffDays < 7) {
+        return 'This Week';
+      } else {
+        return 'Older';
+      }
+    };
+
+    // Draw bands and gradient regions
+    let lastEpochColor = null;
+    let epochStartY = null;
+    let lastEpochLabel = null;
+
+    for (let i = 0; i <= numIntervals; i++) {
+      const bandTime = startTime - (i * intervalMs);
+      if (bandTime < oldest) break;
+
+      const bandY = getYForTime(bandTime);
+      const epochColor = getEpochColor(bandTime);
+      const epochLabel = getEpochLabel(bandTime);
+
+      // Draw gradient region when epoch changes
+      if (lastEpochColor && lastEpochColor !== epochColor && epochStartY !== null) {
+        const regionHeight = bandY - epochStartY;
+        this.ctx.fillStyle = lastEpochColor;
+        this.ctx.fillRect(0, epochStartY, bounds.width, regionHeight);
+
+        // Draw epoch label on the left
+        if (lastEpochLabel) {
+          this.ctx.save();
+          this.ctx.scale(1 / this.scale, 1 / this.scale);
+          this.ctx.translate(-this.offsetX / this.scale, -this.offsetY / this.scale);
+
+          const screenY = epochStartY * this.scale + this.offsetY + 30;
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+          this.ctx.font = '11px "Inter", "SF Pro Display", -apple-system, sans-serif';
+          this.ctx.textAlign = 'left';
+          this.ctx.textBaseline = 'top';
+          this.ctx.fillText(lastEpochLabel, 10, screenY);
+
+          this.ctx.restore();
+        }
+
+        epochStartY = bandY;
+        lastEpochLabel = epochLabel;
+      } else if (epochStartY === null) {
+        epochStartY = bandY;
+        lastEpochLabel = epochLabel;
+      }
+
+      lastEpochColor = epochColor;
+
+      // Draw subtle band line every 15 minutes
+      this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.03)';
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.moveTo(0, bandY);
+      this.ctx.lineTo(bounds.width, bandY);
+      this.ctx.stroke();
+
+      // Add time label on left for some intervals (every hour)
+      if (i % 4 === 0) {
+        const date = new Date(bandTime);
+        const timeLabel = date.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+
+        this.ctx.save();
+        this.ctx.scale(1 / this.scale, 1 / this.scale);
+        this.ctx.translate(-this.offsetX / this.scale, -this.offsetY / this.scale);
+
+        const screenY = bandY * this.scale + this.offsetY;
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        this.ctx.font = '10px "Inter", "SF Pro Display", -apple-system, sans-serif';
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(timeLabel, 10, screenY);
+
+        this.ctx.restore();
+      }
+    }
+
+    // Fill last epoch region
+    if (lastEpochColor && epochStartY !== null) {
+      const lastBandY = getYForTime(oldest);
+      const regionHeight = lastBandY - epochStartY;
+      this.ctx.fillStyle = lastEpochColor;
+      this.ctx.fillRect(0, epochStartY, bounds.width, regionHeight);
+    }
   }
 
   renderBranchRails() {
