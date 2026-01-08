@@ -78,6 +78,16 @@ html, body {
   background-color: var(--button-hover);
 }
 
+#btn-clear {
+  color: #dc3545;
+}
+
+#btn-clear:hover {
+  background-color: #dc3545;
+  color: white;
+  border-color: #dc3545;
+}
+
 #canvas-container {
   flex: 1;
   position: relative;

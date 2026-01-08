@@ -1,4 +1,4 @@
-import { initDB, getTreeData } from '../storage/db.js';
+import { initDB, getTreeData, clearAllData } from '../storage/db.js';
 import { calculateLayout, compressLayout } from '../tree/layout.js';
 import { TreeRenderer } from '../tree/renderer.js';
 
@@ -37,6 +37,13 @@ async function init() {
 
   document.getElementById('btn-fit').addEventListener('click', () => {
     renderer.fitToView();
+  });
+
+  document.getElementById('btn-clear').addEventListener('click', async () => {
+    if (confirm('Clear all browsing history data? This cannot be undone.')) {
+      await clearAllData();
+      await loadAndRender();
+    }
   });
 
   // Initial load

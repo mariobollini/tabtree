@@ -40,6 +40,11 @@ export class TreeRenderer {
   }
 
   getColors() {
+    // Branch colors for visual distinction
+    this.branchColors = this.isDarkMode
+      ? ['#e94560', '#4ecdc4', '#ffe66d', '#95e1d3', '#f38181', '#aa96da', '#fcbad3', '#a8d8ea']
+      : ['#007bff', '#28a745', '#dc3545', '#fd7e14', '#6f42c1', '#20c997', '#e83e8c', '#17a2b8'];
+
     if (this.isDarkMode) {
       return {
         background: '#1a1a2e',
@@ -48,8 +53,8 @@ export class TreeRenderer {
         nodeHover: '#1f4287',
         text: '#e8e8e8',
         textSecondary: '#a0a0a0',
-        connection: '#0f3460',
-        connectionSpawn: '#e94560'
+        connection: '#4a5568',
+        branchRail: 'rgba(255, 255, 255, 0.05)'
       };
     } else {
       return {
@@ -59,10 +64,22 @@ export class TreeRenderer {
         nodeHover: '#e9ecef',
         text: '#212529',
         textSecondary: '#6c757d',
-        connection: '#adb5bd',
-        connectionSpawn: '#007bff'
+        connection: '#6c757d',
+        branchRail: 'rgba(0, 0, 0, 0.03)'
       };
     }
+  }
+
+  getBranchColor(branchId) {
+    // Get a consistent color for each branch
+    if (!this._branchColorMap) {
+      this._branchColorMap = new Map();
+    }
+    if (!this._branchColorMap.has(branchId)) {
+      const index = this._branchColorMap.size % this.branchColors.length;
+      this._branchColorMap.set(branchId, this.branchColors[index]);
+    }
+    return this._branchColorMap.get(branchId);
   }
 
   setupEventListeners() {
@@ -254,13 +271,45 @@ export class TreeRenderer {
     this.ctx.translate(this.offsetX, this.offsetY);
     this.ctx.scale(this.scale, this.scale);
 
-    // Draw connections first (behind nodes)
+    // Draw branch rails (vertical background stripes)
+    this.renderBranchRails();
+
+    // Draw connections (behind nodes)
     this.renderConnections();
 
     // Draw nodes
     this.renderNodes();
 
     this.ctx.restore();
+  }
+
+  renderBranchRails() {
+    if (!this.layout || this.layout.positionedNodes.length === 0) return;
+
+    // Group nodes by branch to find branch columns
+    const branchColumns = new Map();
+    for (const pos of this.layout.positionedNodes) {
+      const branchId = pos.node.branchId;
+      if (!branchColumns.has(branchId)) {
+        branchColumns.set(branchId, { x: pos.x, width: pos.width, minY: pos.y, maxY: pos.y + pos.height });
+      } else {
+        const col = branchColumns.get(branchId);
+        col.minY = Math.min(col.minY, pos.y);
+        col.maxY = Math.max(col.maxY, pos.y + pos.height);
+      }
+    }
+
+    // Draw a subtle vertical rail for each branch
+    for (const [branchId, col] of branchColumns) {
+      const color = this.getBranchColor(branchId);
+      this.ctx.fillStyle = color + '15'; // 15 = ~8% opacity in hex
+      this.ctx.fillRect(
+        col.x - 5,
+        col.minY - 10,
+        col.width + 10,
+        col.maxY - col.minY + 20
+      );
+    }
   }
 
   renderEmptyState(width, height) {
@@ -273,29 +322,24 @@ export class TreeRenderer {
 
   renderConnections() {
     for (const conn of this.layout.connections) {
-      const { from, to, type } = conn;
+      const { from, to } = conn;
+
+      // Use branch color for connections
+      const branchColor = this.getBranchColor(to.node.branchId);
 
       this.ctx.beginPath();
-      this.ctx.strokeStyle = type === 'spawn' ? this.colors.connectionSpawn : this.colors.connection;
-      this.ctx.lineWidth = type === 'spawn' ? 2 : 1.5;
+      this.ctx.strokeStyle = branchColor;
+      this.ctx.lineWidth = 3;
+      this.ctx.lineCap = 'round';
 
-      // Draw curved line
+      // Draw line from bottom of parent to top of child
       const startX = from.x + from.width / 2;
       const startY = from.y + from.height;
       const endX = to.x + to.width / 2;
       const endY = to.y;
 
       this.ctx.moveTo(startX, startY);
-
-      if (type === 'spawn') {
-        // Bezier curve for branch spawns
-        const midY = (startY + endY) / 2;
-        this.ctx.bezierCurveTo(startX, midY, endX, midY, endX, endY);
-      } else {
-        // Straight line for same-branch connections
-        this.ctx.lineTo(endX, endY);
-      }
-
+      this.ctx.lineTo(endX, endY);
       this.ctx.stroke();
     }
   }
@@ -312,6 +356,10 @@ export class TreeRenderer {
     const padding = 8;
     const iconSize = 24;
     const borderRadius = 8;
+    const accentWidth = 4;
+
+    // Get branch color for accent
+    const branchColor = this.getBranchColor(node.branchId);
 
     // Node background
     this.ctx.fillStyle = isHovered ? this.colors.nodeHover : this.colors.nodeBg;
@@ -322,9 +370,20 @@ export class TreeRenderer {
     this.ctx.fill();
     this.ctx.stroke();
 
-    // Favicon placeholder (actual favicon loading would need image handling)
+    // Colored left accent bar
+    this.ctx.fillStyle = branchColor;
+    this.ctx.beginPath();
+    this.ctx.moveTo(x + accentWidth, y);
+    this.ctx.lineTo(x, y);
+    this.ctx.quadraticCurveTo(x, y, x, y + borderRadius);
+    this.ctx.lineTo(x, y + height - borderRadius);
+    this.ctx.quadraticCurveTo(x, y + height, x + accentWidth, y + height);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Favicon placeholder
     this.ctx.fillStyle = this.colors.nodeBorder;
-    this.ctx.fillRect(x + padding, y + (height - iconSize) / 2, iconSize, iconSize);
+    this.ctx.fillRect(x + accentWidth + padding, y + (height - iconSize) / 2, iconSize, iconSize);
 
     // Title
     this.ctx.fillStyle = this.colors.text;
@@ -332,8 +391,8 @@ export class TreeRenderer {
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'middle';
 
-    const titleX = x + padding + iconSize + 8;
-    const maxTitleWidth = width - padding * 2 - iconSize - 8;
+    const titleX = x + accentWidth + padding + iconSize + 8;
+    const maxTitleWidth = width - accentWidth - padding * 2 - iconSize - 8;
     const title = this.truncateText(node.title || node.url, maxTitleWidth);
     this.ctx.fillText(title, titleX, y + height / 2);
   }
