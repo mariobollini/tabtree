@@ -238,20 +238,93 @@ export class TreeRenderer {
   handleWheel(e) {
     e.preventDefault();
 
-    // Scroll vertically through time (like a normal page)
-    // Scrolling down = go back in time (move view down)
     const scrollSpeed = 1.5;
-    this.offsetY -= e.deltaY * scrollSpeed;
+    const oldOffsetY = this.offsetY;
 
-    // Clamp to reasonable bounds
-    if (this.layout) {
-      const viewHeight = this.canvas.height / this.dpr;
-      const maxScroll = 50; // Allow some overscroll at top
-      const minScroll = -(this.layout.bounds.height * this.scale - viewHeight + 100);
-      this.offsetY = Math.min(maxScroll, Math.max(minScroll, this.offsetY));
+    // Check for horizontal scroll (Shift+wheel or trackpad horizontal gesture)
+    if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      // Horizontal scroll
+      this.offsetX -= (e.deltaX || e.deltaY) * scrollSpeed;
+
+      // Clamp horizontal scroll
+      if (this.layout) {
+        const viewWidth = this.canvas.width / this.dpr;
+        const maxOffsetX = 50;
+        const minOffsetX = -(this.layout.bounds.width * this.scale - viewWidth + 50);
+        this.offsetX = Math.min(maxOffsetX, Math.max(minOffsetX, this.offsetX));
+      }
+    } else {
+      // Scroll vertically through time (like a normal page)
+      // Scrolling down = go back in time (move view down)
+      this.offsetY -= e.deltaY * scrollSpeed;
+
+      // Clamp to reasonable bounds
+      if (this.layout) {
+        const viewHeight = this.canvas.height / this.dpr;
+        const maxScroll = 50; // Allow some overscroll at top
+        const minScroll = -(this.layout.bounds.height * this.scale - viewHeight + 100);
+        this.offsetY = Math.min(maxScroll, Math.max(minScroll, this.offsetY));
+      }
+
+      // Auto-pan horizontally when scrolling vertically reveals new columns
+      if (this.layout && Math.abs(oldOffsetY - this.offsetY) > 0) {
+        this.autoPanToVisibleColumns();
+      }
     }
 
     this.render();
+  }
+
+  autoPanToVisibleColumns() {
+    if (!this.layout || !this.layout.positionedNodes) return;
+
+    const viewWidth = this.canvas.width / this.dpr;
+    const viewHeight = this.canvas.height / this.dpr;
+
+    // Calculate visible Y range in world coordinates
+    const topY = -this.offsetY / this.scale;
+    const bottomY = (viewHeight - this.offsetY) / this.scale;
+
+    // Find columns that have nodes in the visible Y range
+    const visibleNodeColumns = new Set();
+    for (const pos of this.layout.positionedNodes) {
+      const nodeTop = pos.y;
+      const nodeBottom = pos.y + pos.height;
+
+      // Check if this node is in the visible Y range
+      if (nodeBottom >= topY && nodeTop <= bottomY) {
+        visibleNodeColumns.add(pos.node.branchId);
+      }
+    }
+
+    if (visibleNodeColumns.size === 0) return;
+
+    // Find the X range of columns with visible nodes
+    const visibleHeaders = this.layout.branchHeaders.filter(h =>
+      visibleNodeColumns.has(h.branch.id)
+    );
+
+    if (visibleHeaders.length === 0) return;
+
+    const leftmostX = Math.min(...visibleHeaders.map(h => h.x));
+    const rightmostX = Math.max(...visibleHeaders.map(h => h.x + h.width));
+
+    // Calculate currently visible X range in world coordinates
+    const viewLeftX = -this.offsetX / this.scale;
+    const viewRightX = (viewWidth - this.offsetX) / this.scale;
+
+    // If leftmost visible column is off-screen to the left, pan to show it
+    if (leftmostX < viewLeftX) {
+      // Pan left to show the leftmost column
+      const targetOffsetX = -leftmostX * this.scale + 40;
+      this.offsetX = targetOffsetX;
+    }
+    // If rightmost visible column is off-screen to the right, pan to show it
+    else if (rightmostX > viewRightX) {
+      // Pan right to show the rightmost column
+      const targetOffsetX = viewWidth - rightmostX * this.scale - 40;
+      this.offsetX = targetOffsetX;
+    }
   }
 
   handleClick(e) {
@@ -319,6 +392,9 @@ export class TreeRenderer {
     this.renderHeaders();
 
     this.ctx.restore();
+
+    // Render scroll cues in screen space (after restore)
+    this.renderScrollCues(width, height);
   }
 
   renderBranchRails() {
@@ -351,6 +427,86 @@ export class TreeRenderer {
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.ctx.fillText('Start browsing to see your history tree', width / 2, height / 2);
+  }
+
+  renderScrollCues(width, height) {
+    if (!this.layout || !this.layout.branchHeaders) return;
+
+    const { bounds, branchHeaders } = this.layout;
+    const numColumns = branchHeaders.length;
+
+    if (numColumns === 0) return;
+
+    // Calculate visible range
+    const leftEdge = -this.offsetX / this.scale;
+    const rightEdge = (width - this.offsetX) / this.scale;
+
+    const hasOverflowLeft = leftEdge > 0;
+    const hasOverflowRight = rightEdge < bounds.width;
+
+    // Fade effect at edges
+    const fadeWidth = 60;
+    if (hasOverflowLeft) {
+      const gradient = this.ctx.createLinearGradient(0, 0, fadeWidth, 0);
+      gradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      this.ctx.fillStyle = gradient;
+      this.ctx.fillRect(0, 0, fadeWidth, height);
+    }
+
+    if (hasOverflowRight) {
+      const gradient = this.ctx.createLinearGradient(width - fadeWidth, 0, width, 0);
+      gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0.95)');
+      this.ctx.fillStyle = gradient;
+      this.ctx.fillRect(width - fadeWidth, 0, fadeWidth, height);
+    }
+
+    // Arrow indicators
+    const arrowY = height / 2;
+    const arrowSize = 12;
+
+    if (hasOverflowLeft) {
+      this.ctx.fillStyle = this.colors.text + '60';
+      this.ctx.beginPath();
+      this.ctx.moveTo(20, arrowY);
+      this.ctx.lineTo(20 + arrowSize, arrowY - arrowSize);
+      this.ctx.lineTo(20 + arrowSize, arrowY + arrowSize);
+      this.ctx.closePath();
+      this.ctx.fill();
+    }
+
+    if (hasOverflowRight) {
+      this.ctx.fillStyle = this.colors.text + '60';
+      this.ctx.beginPath();
+      this.ctx.moveTo(width - 20, arrowY);
+      this.ctx.lineTo(width - 20 - arrowSize, arrowY - arrowSize);
+      this.ctx.lineTo(width - 20 - arrowSize, arrowY + arrowSize);
+      this.ctx.closePath();
+      this.ctx.fill();
+    }
+
+    // Column counter at top
+    // Calculate which columns are currently visible
+    const visibleColumns = branchHeaders.filter(header => {
+      const headerRight = header.x + header.width;
+      return header.x < rightEdge && headerRight > leftEdge;
+    });
+
+    const firstVisibleIndex = branchHeaders.indexOf(visibleColumns[0]) + 1;
+    const lastVisibleIndex = branchHeaders.indexOf(visibleColumns[visibleColumns.length - 1]) + 1;
+
+    if (visibleColumns.length > 0) {
+      const counterText = numColumns > visibleColumns.length
+        ? `Showing ${firstVisibleIndex}-${lastVisibleIndex} of ${numColumns} tabs`
+        : `${numColumns} tab${numColumns === 1 ? '' : 's'}`;
+
+      this.ctx.fillStyle = this.colors.textSecondary;
+      this.ctx.font = '13px "Inter", "SF Pro Display", -apple-system, sans-serif';
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'top';
+      this.ctx.fillText(counterText, width / 2, 10);
+    }
   }
 
   renderConnections() {
@@ -601,19 +757,26 @@ export class TreeRenderer {
     this.render();
   }
 
-  // Fit content to width and position at top (for initial view)
+  // Fit content to width and position at top right (for initial view)
+  // Shows the most recent columns on the right
   fitToWidth() {
     if (!this.layout || this.layout.positionedNodes.length === 0) return;
 
     const width = this.canvas.width / this.dpr;
     const { bounds } = this.layout;
 
-    // Scale to fit width, but not smaller than 0.7 and not larger than 1
-    const scaleX = (width - 60) / bounds.width;
-    this.scale = Math.min(Math.max(scaleX, 0.7), 1);
+    // Keep scale at 1.0 (no zoom)
+    this.scale = 1.0;
 
-    // Center horizontally, start at top
-    this.offsetX = (width - bounds.width * this.scale) / 2;
+    // Position to show rightmost columns (most recent)
+    // If content fits in viewport, center it
+    if (bounds.width <= width) {
+      this.offsetX = (width - bounds.width) / 2;
+    } else {
+      // Position so rightmost content is visible
+      this.offsetX = width - bounds.width - 30;
+    }
+
     this.offsetY = 30;
 
     this.render();

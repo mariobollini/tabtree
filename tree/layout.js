@@ -123,18 +123,41 @@ export function calculateLayout(data, viewportWidth, openTabIds = new Set()) {
   };
 }
 
+// Calculate max visible columns based on viewport width
+export function getMaxVisibleColumns(viewportWidth) {
+  if (viewportWidth > 1600) return 6;
+  if (viewportWidth > 1200) return 4;
+  if (viewportWidth > 768) return 3;
+  return 1;
+}
+
 // Compress layout to fit viewport while maintaining readability
+// Only compresses if columns fit within max visible threshold
 export function compressLayout(layout, viewportWidth, minNodeWidth = 150) {
   const { positionedNodes, connections, branchHeaders, bounds } = layout;
 
-  if (bounds.width <= viewportWidth || positionedNodes.length === 0) {
+  if (positionedNodes.length === 0) {
     return layout;
   }
 
-  // Calculate compression ratio
+  // Calculate how many columns we have
+  const numColumns = branchHeaders.length;
+  const maxVisible = getMaxVisibleColumns(viewportWidth);
+
+  // If we have more columns than max visible, don't compress - let them overflow
+  if (numColumns > maxVisible) {
+    return layout;
+  }
+
+  // If content already fits, don't compress
+  if (bounds.width <= viewportWidth) {
+    return layout;
+  }
+
+  // Only compress if we have few columns that almost fit
   const availableWidth = viewportWidth - (LEFT_MARGIN * 2);
   const contentWidth = bounds.width - (LEFT_MARGIN * 2);
-  const ratio = Math.max(0.5, availableWidth / contentWidth); // Don't compress too much
+  const ratio = Math.max(0.5, availableWidth / contentWidth);
 
   // Apply compression to nodes
   const compressedNodes = positionedNodes.map(pos => ({
