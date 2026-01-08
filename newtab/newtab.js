@@ -1,7 +1,7 @@
 import { initDB, getTreeData, clearAllData, updateBranchTitle, getNodesByBranch, updateBranchSummary, getAllBranches } from '../storage/db.js';
 import { calculateLayout, compressLayout } from '../tree/layout.js';
 import { TreeRenderer } from '../tree/renderer.js';
-import { initSummarizer, generateSummary, isSummarizerAvailable, getSummarizerError } from './summarizer.js';
+import { initSummarizer, generateSummary, isSummarizerAvailable, getSummarizerError, generateHeuristicSummary } from './summarizer.js';
 
 let renderer = null;
 let tooltip = null;
@@ -92,8 +92,6 @@ async function loadAndRender() {
 }
 
 async function updateAllSummaries() {
-  if (!isSummarizerAvailable()) return;
-
   try {
     const branches = await getAllBranches();
 
@@ -104,10 +102,22 @@ async function updateAllSummaries() {
         if (nodes.length > 0) {
           nodes.sort((a, b) => a.timestamp - b.timestamp);
 
-          const summary = await generateSummary(nodes.map(n => ({
+          const pages = nodes.map(n => ({
             title: n.title,
             url: n.url
-          })));
+          }));
+
+          let summary = null;
+
+          // Try AI first if available
+          if (isSummarizerAvailable()) {
+            summary = await generateSummary(pages);
+          }
+
+          // Fall back to heuristic if AI not available or failed
+          if (!summary) {
+            summary = generateHeuristicSummary(pages);
+          }
 
           if (summary) {
             await updateBranchSummary(branch.id, summary);

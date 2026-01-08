@@ -92,3 +92,84 @@ export function isSummarizerAvailable() {
 export function getSummarizerError() {
   return errorMessage;
 }
+
+// Fallback heuristic summarization when AI isn't available
+export function generateHeuristicSummary(pages) {
+  if (!pages || pages.length === 0) return null;
+
+  // Extract meaningful words from titles (filter out common stop words)
+  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'from', 'as', 'is', 'was', 'are', 'been', 'be', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'what', 'which', 'who', 'when', 'where', 'why', 'how']);
+
+  const wordCounts = new Map();
+  const domains = new Set();
+
+  pages.forEach(page => {
+    // Extract domain
+    try {
+      const url = new URL(page.url);
+      const domain = url.hostname.replace('www.', '').split('.')[0];
+      domains.add(domain);
+    } catch (e) {
+      // Invalid URL, skip
+    }
+
+    // Extract words from title
+    const title = (page.title || '').toLowerCase();
+    const words = title.split(/[\s\-_|:,\.\/]+/)
+      .filter(word => word.length > 3 && !stopWords.has(word))
+      .filter(word => !/^\d+$/.test(word)); // Filter out pure numbers
+
+    words.forEach(word => {
+      wordCounts.set(word, (wordCounts.get(word) || 0) + 1);
+    });
+  });
+
+  // Find most common words (mentioned 2+ times or in multiple pages)
+  const keywords = Array.from(wordCounts.entries())
+    .filter(([word, count]) => count >= 2 || pages.length <= 3)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([word]) => word);
+
+  // Detect patterns
+  const patterns = [];
+  const allText = pages.map(p => (p.title || '').toLowerCase()).join(' ');
+
+  if (allText.includes('documentation') || allText.includes('docs') || allText.includes('guide') || allText.includes('tutorial')) {
+    patterns.push('reading documentation');
+  }
+  if (allText.includes('github') || allText.includes('repository') || allText.includes('code')) {
+    patterns.push('reviewing code');
+  }
+  if (allText.includes('shop') || allText.includes('buy') || allText.includes('price') || allText.includes('cart')) {
+    patterns.push('shopping');
+  }
+  if (allText.includes('news') || allText.includes('article')) {
+    patterns.push('reading news');
+  }
+  if (domains.size === 1 && pages.length > 3) {
+    patterns.push(`browsing ${Array.from(domains)[0]}`);
+  }
+
+  // Build summary
+  let summary = '';
+
+  if (patterns.length > 0) {
+    summary = patterns[0].charAt(0).toUpperCase() + patterns[0].slice(1);
+  } else if (keywords.length > 0) {
+    summary = `Researching ${keywords.slice(0, 3).join(', ')}`;
+  } else if (pages.length === 1) {
+    // Single page - just use a shortened title
+    const title = pages[0].title || 'Untitled';
+    summary = title.length > 50 ? title.substring(0, 47) + '...' : title;
+  } else {
+    summary = `Browsing ${pages.length} pages`;
+  }
+
+  // Add page count context if multiple pages
+  if (pages.length > 1 && !summary.includes(pages.length.toString())) {
+    summary += ` (${pages.length} page${pages.length === 1 ? '' : 's'})`;
+  }
+
+  return summary;
+}
