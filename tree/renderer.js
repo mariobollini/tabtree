@@ -506,57 +506,41 @@ export class TreeRenderer {
     let epochStartY = null;
     let lastEpochLabel = null;
 
-    // Generate time points for drawing (every 15 minutes)
-    const timePoints = [];
-    for (let time = mostRecent; time >= oldest; time -= intervalMs) {
-      timePoints.push(time);
-    }
-
     // Helper to find Y position for a given timestamp (interpolate from nodes)
-    const getYForTime = (timestamp) => {
-      // Find closest nodes before and after this timestamp
-      let beforeNode = null;
-      let afterNode = null;
+    const getYForTime = (timestamp, startNode, endNode) => {
+      if (!endNode) {
+        return startNode.y;
+      }
 
-      for (const node of sortedNodes) {
-        if (node.node.timestamp >= timestamp) {
-          beforeNode = node;
-        } else if (node.node.timestamp < timestamp && !afterNode) {
-          afterNode = node;
-          break;
+      const timeDiff = startNode.node.timestamp - endNode.node.timestamp;
+      const timeOffset = startNode.node.timestamp - timestamp;
+      const ratio = timeOffset / timeDiff;
+      const yDiff = endNode.y - startNode.y;
+      return startNode.y + yDiff * ratio;
+    };
+
+    // Draw bands at 15-minute intervals, only between consecutive nodes without gaps
+    for (let i = 0; i < sortedNodes.length - 1; i++) {
+      const currentNode = sortedNodes[i];
+      const nextNode = sortedNodes[i + 1];
+      const timeGap = currentNode.node.timestamp - nextNode.node.timestamp;
+
+      // Only draw bands if gap is <= 15 minutes (no break zone)
+      if (timeGap <= intervalMs) {
+        // Generate time points between these two nodes
+        const startTime = currentNode.node.timestamp;
+        const endTime = nextNode.node.timestamp;
+
+        for (let time = startTime; time >= endTime; time -= intervalMs) {
+          const bandY = getYForTime(time, currentNode, nextNode);
+
+          this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+          this.ctx.lineWidth = 1;
+          this.ctx.beginPath();
+          this.ctx.moveTo(0, bandY);
+          this.ctx.lineTo(bounds.width, bandY);
+          this.ctx.stroke();
         }
-      }
-
-      // If we have both nodes, interpolate
-      if (beforeNode && afterNode) {
-        const timeDiff = beforeNode.node.timestamp - afterNode.node.timestamp;
-        const timeOffset = beforeNode.node.timestamp - timestamp;
-        const ratio = timeOffset / timeDiff;
-        const yDiff = afterNode.y - beforeNode.y;
-        return beforeNode.y + yDiff * ratio;
-      }
-
-      // Otherwise use the closest node
-      return (beforeNode || afterNode || sortedNodes[0]).y;
-    };
-
-    // Helper to check if Y is in a break zone
-    const isInBreakZone = (y) => {
-      return breakZones.some(zone => y > zone.startY && y < zone.endY);
-    };
-
-    // Draw bands at 15-minute intervals
-    for (const time of timePoints) {
-      const bandY = getYForTime(time);
-
-      if (!isInBreakZone(bandY)) {
-        // Draw band line
-        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
-        this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
-        this.ctx.moveTo(0, bandY);
-        this.ctx.lineTo(bounds.width, bandY);
-        this.ctx.stroke();
       }
     }
 
@@ -594,28 +578,41 @@ export class TreeRenderer {
       lastEpochColor = epochColor;
     }
 
-    // Collect time labels (every hour)
-    let lastHourBoundary = null;
-    for (const time of timePoints) {
-      const hourBoundary = Math.floor(time / (60 * 60 * 1000));
-      if (lastHourBoundary !== hourBoundary) {
-        const bandY = getYForTime(time);
-        if (!isInBreakZone(bandY)) {
-          const date = new Date(time);
-          const timeLabel = date.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          });
+    // Collect time labels (every hour) - only between consecutive nodes without gaps
+    for (let i = 0; i < sortedNodes.length - 1; i++) {
+      const currentNode = sortedNodes[i];
+      const nextNode = sortedNodes[i + 1];
+      const timeGap = currentNode.node.timestamp - nextNode.node.timestamp;
 
-          const screenY = bandY * this.scale + this.offsetY;
-          this.timelineLabels.push({
-            text: timeLabel,
-            y: screenY,
-            type: 'time'
-          });
+      // Only add time labels if gap is <= 15 minutes (no break zone)
+      if (timeGap <= intervalMs) {
+        const startTime = currentNode.node.timestamp;
+        const endTime = nextNode.node.timestamp;
+
+        // Find hour boundaries within this segment
+        const startHour = Math.floor(startTime / (60 * 60 * 1000));
+        const endHour = Math.floor(endTime / (60 * 60 * 1000));
+
+        // Add label at each hour boundary
+        for (let hour = startHour; hour >= endHour; hour--) {
+          const hourTime = hour * 60 * 60 * 1000;
+          if (hourTime >= endTime && hourTime <= startTime) {
+            const bandY = getYForTime(hourTime, currentNode, nextNode);
+            const date = new Date(hourTime);
+            const timeLabel = date.toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            });
+
+            const screenY = bandY * this.scale + this.offsetY;
+            this.timelineLabels.push({
+              text: timeLabel,
+              y: screenY,
+              type: 'time'
+            });
+          }
         }
-        lastHourBoundary = hourBoundary;
       }
     }
 

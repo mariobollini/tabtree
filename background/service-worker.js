@@ -78,8 +78,18 @@ async function createNode(tabId, url, title) {
     // Check if this tab was opened from another tab
     if (pendingTabParents.has(tabId)) {
       const openerTabId = pendingTabParents.get(tabId);
-      openerNodeId = lastNodePerTab.get(openerTabId) || null;
+
+      // Try in-memory map first, then fall back to database
+      openerNodeId = lastNodePerTab.get(openerTabId);
+      if (!openerNodeId) {
+        // Fetch latest node from database for this opener tab
+        const openerNode = await getLatestNodeForTab(openerTabId);
+        openerNodeId = openerNode?.id || null;
+      }
+
       pendingTabParents.delete(tabId); // Clean up
+
+      console.log('Canopy: Tab', tabId, 'opened from tab', openerTabId, 'with node', openerNodeId);
     }
 
     const branch = await createBranch(tabId, openerNodeId);
