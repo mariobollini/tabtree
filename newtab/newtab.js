@@ -40,11 +40,19 @@ async function init() {
   handleResize();
 
   document.getElementById('btn-reset').addEventListener('click', () => {
-    renderer.resetView();
+    renderer.fitToWidth();
   });
 
   document.getElementById('btn-fit').addEventListener('click', () => {
     renderer.fitToView();
+  });
+
+  document.getElementById('btn-zoom-in').addEventListener('click', () => {
+    renderer.zoomIn();
+  });
+
+  document.getElementById('btn-zoom-out').addEventListener('click', () => {
+    renderer.zoomOut();
   });
 
   document.getElementById('btn-clear').addEventListener('click', async () => {

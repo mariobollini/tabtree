@@ -1167,4 +1167,44 @@ export class TreeRenderer {
 
     this.render();
   }
+
+  // Zoom in around the center of the viewport
+  zoomIn() {
+    const width = this.canvas.width / this.dpr;
+    const height = this.canvas.height / this.dpr;
+
+    // Get center point in world coordinates before zoom
+    const centerX = (width / 2 - this.offsetX) / this.scale;
+    const centerY = (height / 2 - this.offsetY) / this.scale;
+
+    // Increase scale (zoom in) by 20%
+    const oldScale = this.scale;
+    this.scale = Math.min(this.scale * 1.2, 3.0); // Max zoom 3x
+
+    // Adjust offset to keep center point in same screen position
+    this.offsetX = width / 2 - centerX * this.scale;
+    this.offsetY = height / 2 - centerY * this.scale;
+
+    this.render();
+  }
+
+  // Zoom out around the center of the viewport
+  zoomOut() {
+    const width = this.canvas.width / this.dpr;
+    const height = this.canvas.height / this.dpr;
+
+    // Get center point in world coordinates before zoom
+    const centerX = (width / 2 - this.offsetX) / this.scale;
+    const centerY = (height / 2 - this.offsetY) / this.scale;
+
+    // Decrease scale (zoom out) by 20%
+    const oldScale = this.scale;
+    this.scale = Math.max(this.scale / 1.2, 0.1); // Min zoom 0.1x
+
+    // Adjust offset to keep center point in same screen position
+    this.offsetX = width / 2 - centerX * this.scale;
+    this.offsetY = height / 2 - centerY * this.scale;
+
+    this.render();
+  }
 }
