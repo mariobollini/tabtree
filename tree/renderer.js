@@ -527,19 +527,25 @@ export class TreeRenderer {
 
       // Only draw bands if gap is <= 15 minutes (no break zone)
       if (timeGap <= intervalMs) {
-        // Generate time points between these two nodes
         const startTime = currentNode.node.timestamp;
         const endTime = nextNode.node.timestamp;
 
-        for (let time = startTime; time >= endTime; time -= intervalMs) {
-          const bandY = getYForTime(time, currentNode, nextNode);
+        // Find the first 15-minute boundary at or before startTime
+        const firstBoundary = Math.floor(startTime / intervalMs) * intervalMs;
 
-          this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
-          this.ctx.lineWidth = 1;
-          this.ctx.beginPath();
-          this.ctx.moveTo(0, bandY);
-          this.ctx.lineTo(bounds.width, bandY);
-          this.ctx.stroke();
+        // Draw bands at each 15-minute boundary within this segment
+        for (let time = firstBoundary; time >= endTime; time -= intervalMs) {
+          // Only draw if the boundary is actually within the segment
+          if (time <= startTime && time >= endTime) {
+            const bandY = getYForTime(time, currentNode, nextNode);
+
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+            this.ctx.lineWidth = 1;
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, bandY);
+            this.ctx.lineTo(bounds.width, bandY);
+            this.ctx.stroke();
+          }
         }
       }
     }
