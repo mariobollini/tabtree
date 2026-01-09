@@ -417,29 +417,15 @@ export class TreeRenderer {
     const height = this.canvas.height / this.dpr;
     const { bounds } = this.layout;
 
+    // Sort nodes by timestamp (newest first = highest Y)
+    const sortedNodes = [...this.layout.positionedNodes].sort((a, b) => b.node.timestamp - a.node.timestamp);
+
     // Find time range from nodes
-    const timestamps = this.layout.positionedNodes.map(pos => pos.node.timestamp);
-    const mostRecent = Math.max(...timestamps);
-    const oldest = Math.min(...timestamps);
+    const mostRecent = sortedNodes[0].node.timestamp;
+    const oldest = sortedNodes[sortedNodes.length - 1].node.timestamp;
 
     const now = Date.now();
-    const startTime = mostRecent;
-
-    // Calculate Y position for a given timestamp
-    const getYForTime = (timestamp) => {
-      // Find nodes at or near this time to get Y position
-      const closestNode = this.layout.positionedNodes.reduce((closest, pos) => {
-        const timeDiff = Math.abs(pos.node.timestamp - timestamp);
-        const closestDiff = Math.abs(closest.node.timestamp - timestamp);
-        return timeDiff < closestDiff ? pos : closest;
-      });
-      return closestNode.y;
-    };
-
-    // 15 minute intervals
-    const intervalMs = 15 * 60 * 1000;
-    const timeSpan = startTime - oldest;
-    const numIntervals = Math.ceil(timeSpan / intervalMs);
+    const intervalMs = 15 * 60 * 1000; // 15 minutes
 
     // Define epochs for gradient changes
     const oneHourAgo = now - (60 * 60 * 1000);
@@ -479,76 +465,202 @@ export class TreeRenderer {
       }
     };
 
-    // Draw bands and gradient regions
+    // Format time gap for break labels
+    const formatTimeGap = (ms) => {
+      const minutes = Math.floor(ms / (60 * 1000));
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+
+      if (days > 0) {
+        const remainingHours = hours % 24;
+        return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+      } else if (hours > 0) {
+        const remainingMinutes = minutes % 60;
+        return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+      } else {
+        return `${minutes}m`;
+      }
+    };
+
+    // Detect time gaps between consecutive nodes
+    const breakZones = [];
+    for (let i = 0; i < sortedNodes.length - 1; i++) {
+      const current = sortedNodes[i];
+      const next = sortedNodes[i + 1];
+      const timeGap = current.node.timestamp - next.node.timestamp;
+
+      // If gap > 15 minutes, mark as break zone
+      if (timeGap > intervalMs) {
+        breakZones.push({
+          startY: current.y + current.height,
+          endY: next.y,
+          startTime: next.node.timestamp,
+          endTime: current.node.timestamp,
+          gap: timeGap
+        });
+      }
+    }
+
+    // Draw epoch gradient regions
     let lastEpochColor = null;
     let epochStartY = null;
     let lastEpochLabel = null;
 
-    for (let i = 0; i <= numIntervals; i++) {
-      const bandTime = startTime - (i * intervalMs);
-      if (bandTime < oldest) break;
+    // Generate time points for drawing (every 15 minutes)
+    const timePoints = [];
+    for (let time = mostRecent; time >= oldest; time -= intervalMs) {
+      timePoints.push(time);
+    }
 
-      const bandY = getYForTime(bandTime);
-      const epochColor = getEpochColor(bandTime);
-      const epochLabel = getEpochLabel(bandTime);
+    // Helper to find Y position for a given timestamp (interpolate from nodes)
+    const getYForTime = (timestamp) => {
+      // Find closest nodes before and after this timestamp
+      let beforeNode = null;
+      let afterNode = null;
 
-      // Draw gradient region when epoch changes
-      if (lastEpochColor && lastEpochColor !== epochColor && epochStartY !== null) {
-        const regionHeight = bandY - epochStartY;
-        this.ctx.fillStyle = lastEpochColor;
-        this.ctx.fillRect(0, epochStartY, bounds.width, regionHeight);
-
-        // Collect epoch label for later rendering
-        if (lastEpochLabel) {
-          const screenY = epochStartY * this.scale + this.offsetY + 30;
-          this.timelineLabels.push({
-            text: lastEpochLabel,
-            y: screenY,
-            type: 'epoch'
-          });
+      for (const node of sortedNodes) {
+        if (node.node.timestamp >= timestamp) {
+          beforeNode = node;
+        } else if (node.node.timestamp < timestamp && !afterNode) {
+          afterNode = node;
+          break;
         }
+      }
 
-        epochStartY = bandY;
-        lastEpochLabel = epochLabel;
-      } else if (epochStartY === null) {
-        epochStartY = bandY;
+      // If we have both nodes, interpolate
+      if (beforeNode && afterNode) {
+        const timeDiff = beforeNode.node.timestamp - afterNode.node.timestamp;
+        const timeOffset = beforeNode.node.timestamp - timestamp;
+        const ratio = timeOffset / timeDiff;
+        const yDiff = afterNode.y - beforeNode.y;
+        return beforeNode.y + yDiff * ratio;
+      }
+
+      // Otherwise use the closest node
+      return (beforeNode || afterNode || sortedNodes[0]).y;
+    };
+
+    // Helper to check if Y is in a break zone
+    const isInBreakZone = (y) => {
+      return breakZones.some(zone => y > zone.startY && y < zone.endY);
+    };
+
+    // Draw bands at 15-minute intervals
+    for (const time of timePoints) {
+      const bandY = getYForTime(time);
+
+      if (!isInBreakZone(bandY)) {
+        // Draw band line
+        this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, bandY);
+        this.ctx.lineTo(bounds.width, bandY);
+        this.ctx.stroke();
+      }
+    }
+
+    // Draw epoch gradient regions
+    for (let i = 0; i < sortedNodes.length; i++) {
+      const node = sortedNodes[i];
+      const epochColor = getEpochColor(node.node.timestamp);
+      const epochLabel = getEpochLabel(node.node.timestamp);
+
+      // Determine region bounds
+      const regionStartY = i === 0 ? 0 : (sortedNodes[i - 1].y + sortedNodes[i - 1].height + node.y) / 2;
+      const regionEndY = i === sortedNodes.length - 1 ? bounds.height : (node.y + node.height + sortedNodes[i + 1].y) / 2;
+
+      // Draw gradient region if epoch changed
+      if (lastEpochColor !== epochColor) {
+        if (lastEpochColor && epochStartY !== null) {
+          const regionHeight = regionStartY - epochStartY;
+          this.ctx.fillStyle = lastEpochColor;
+          this.ctx.fillRect(0, epochStartY, bounds.width, regionHeight);
+
+          // Collect epoch label
+          if (lastEpochLabel) {
+            const screenY = epochStartY * this.scale + this.offsetY + 30;
+            this.timelineLabels.push({
+              text: lastEpochLabel,
+              y: screenY,
+              type: 'epoch'
+            });
+          }
+        }
+        epochStartY = regionStartY;
         lastEpochLabel = epochLabel;
       }
 
       lastEpochColor = epochColor;
+    }
 
-      // Draw band line every 15 minutes
-      this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.15)';
-      this.ctx.lineWidth = 1;
-      this.ctx.beginPath();
-      this.ctx.moveTo(0, bandY);
-      this.ctx.lineTo(bounds.width, bandY);
-      this.ctx.stroke();
+    // Collect time labels (every hour)
+    let lastHourBoundary = null;
+    for (const time of timePoints) {
+      const hourBoundary = Math.floor(time / (60 * 60 * 1000));
+      if (lastHourBoundary !== hourBoundary) {
+        const bandY = getYForTime(time);
+        if (!isInBreakZone(bandY)) {
+          const date = new Date(time);
+          const timeLabel = date.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
 
-      // Collect time label for some intervals (every hour)
-      if (i % 4 === 0) {
-        const date = new Date(bandTime);
-        const timeLabel = date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        });
-
-        const screenY = bandY * this.scale + this.offsetY;
-        this.timelineLabels.push({
-          text: timeLabel,
-          y: screenY,
-          type: 'time'
-        });
+          const screenY = bandY * this.scale + this.offsetY;
+          this.timelineLabels.push({
+            text: timeLabel,
+            y: screenY,
+            type: 'time'
+          });
+        }
+        lastHourBoundary = hourBoundary;
       }
     }
 
     // Fill last epoch region
     if (lastEpochColor && epochStartY !== null) {
-      const lastBandY = getYForTime(oldest);
-      const regionHeight = lastBandY - epochStartY;
+      const regionHeight = bounds.height - epochStartY;
       this.ctx.fillStyle = lastEpochColor;
       this.ctx.fillRect(0, epochStartY, bounds.width, regionHeight);
+    }
+
+    // Draw zigzag break indicators for large gaps
+    for (const zone of breakZones) {
+      const centerY = (zone.startY + zone.endY) / 2;
+      const zigzagHeight = 20;
+      const zigzagWidth = 8;
+      const numZigs = 6;
+
+      // Draw zigzag line across the width
+      this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+      this.ctx.lineWidth = 2;
+      this.ctx.beginPath();
+
+      const startX = 0;
+      const endX = bounds.width;
+      const segmentWidth = (endX - startX) / numZigs;
+
+      for (let i = 0; i <= numZigs; i++) {
+        const x = startX + i * segmentWidth;
+        const y = centerY + (i % 2 === 0 ? -zigzagHeight / 2 : zigzagHeight / 2);
+        if (i === 0) {
+          this.ctx.moveTo(x, centerY);
+        } else {
+          this.ctx.lineTo(x, y);
+        }
+      }
+      this.ctx.stroke();
+
+      // Add time gap label (collect for later rendering in screen space)
+      const gapLabel = formatTimeGap(zone.gap) + ' gap';
+      const screenY = centerY * this.scale + this.offsetY;
+      this.timelineLabels.push({
+        text: gapLabel,
+        y: screenY,
+        type: 'gap'
+      });
     }
   }
 
@@ -573,6 +685,13 @@ export class TreeRenderer {
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(label.text, 10, label.y);
+      } else if (label.type === 'gap') {
+        // Gap labels - centered and prominent
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+        this.ctx.font = '600 13px "Inter", "SF Pro Display", -apple-system, sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(label.text, width / 2, label.y);
       }
     }
   }
