@@ -134,7 +134,7 @@ async function updateAllSummaries() {
       }
     }
   } catch (err) {
-    console.log('Canopy: Summary update skipped:', err);
+    console.log('TabTree: Summary update skipped:', err);
   }
 }
 
@@ -271,5 +271,5 @@ function escapeHtml(text) {
 }
 
 init().catch(err => {
-  console.error('Failed to initialize Canopy:', err);
+  console.error('Failed to initialize TabTree:', err);
 });

@@ -1,8 +1,8 @@
-# Canopy - Implementation Notes
+# TabTree - Implementation Notes
 
 ## Overview
 
-Canopy is a Chrome extension that visualizes browsing history as a tree. This document captures implementation details, architecture decisions, and context for future development.
+TabTree is a Chrome extension that visualizes browsing history as a tree. This document captures implementation details, architecture decisions, and context for future development.
 
 **Version:** 0.1.0
 **Status:** Stable, feature-complete for MVP
@@ -15,7 +15,7 @@ Canopy is a Chrome extension that visualizes browsing history as a tree. This do
 ### File Structure
 
 ```
-canopy/
+tabtree/
 ├── manifest.json              # Extension configuration (Manifest V3)
 ├── background/
 │   └── service-worker.js      # Tracks navigation events, manages data
@@ -450,7 +450,7 @@ if (worldX >= node.x && worldX <= node.x + node.width &&
 ### Debugging Tips
 
 - **Console logging:** Check background service worker console separately
-- **IndexedDB:** Use Chrome DevTools → Application → IndexedDB → canopy-history
+- **IndexedDB:** Use Chrome DevTools → Application → IndexedDB → tabtree
 - **Canvas debugging:** Add `console.log` in render methods (avoid in loops)
 - **Performance:** Use Chrome DevTools → Performance → Record
 

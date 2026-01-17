@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Canopy",
+  "name": "TabTree",
   "description": "Visualize your browsing history as a branching tree",
   "version": "1.0.0",
   "permissions": [

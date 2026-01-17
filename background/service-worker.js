@@ -11,9 +11,9 @@ import {
 
 // Initialize database on startup
 initDB().then(() => {
-  console.log('Canopy: Database initialized');
+  console.log('TabTree: Database initialized');
 }).catch(err => {
-  console.error('Canopy: Failed to initialize database', err);
+  console.error('TabTree: Failed to initialize database', err);
 });
 
 // Track tab relationships
@@ -24,7 +24,7 @@ const lastNodePerTab = new Map(); // tabId → nodeId
 chrome.tabs.onCreated.addListener((tab) => {
   if (tab.openerTabId) {
     pendingTabParents.set(tab.id, tab.openerTabId);
-    console.log('Canopy: Tab', tab.id, 'opened from tab', tab.openerTabId);
+    console.log('TabTree: Tab', tab.id, 'opened from tab', tab.openerTabId);
   }
 });
 
@@ -62,7 +62,7 @@ async function createBranch(tabId, openerNodeId = null) {
   await addBranch(branch);
   await setTabMapping(tabId, branch.id);
 
-  console.log('Canopy: Created branch', branch.id, 'for tab', tabId,
+  console.log('TabTree: Created branch', branch.id, 'for tab', tabId,
               openerNodeId ? `(opened from node ${openerNodeId})` : '(trunk)');
   return branch;
 }
@@ -89,7 +89,7 @@ async function createNode(tabId, url, title) {
 
       pendingTabParents.delete(tabId); // Clean up
 
-      console.log('Canopy: Tab', tabId, 'opened from tab', openerTabId, 'with node', openerNodeId);
+      console.log('TabTree: Tab', tabId, 'opened from tab', openerTabId, 'with node', openerNodeId);
     }
 
     const branch = await createBranch(tabId, openerNodeId);
@@ -115,7 +115,7 @@ async function createNode(tabId, url, title) {
   // Update last node tracker
   lastNodePerTab.set(tabId, node.id);
 
-  console.log('Canopy: Created node', node.id, 'for', url);
+  console.log('TabTree: Created node', node.id, 'for', url);
 
   return node;
 }
@@ -125,7 +125,7 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   await removeTabMapping(tabId);
   lastNodePerTab.delete(tabId);
   pendingTabParents.delete(tabId);
-  console.log('Canopy: Cleaned up tab', tabId);
+  console.log('TabTree: Cleaned up tab', tabId);
 });
 
 // Listen for navigation commits (actual page loads)
@@ -140,7 +140,7 @@ chrome.webNavigation.onCommitted.addListener(async (details) => {
     const tab = await chrome.tabs.get(details.tabId);
     await createNode(details.tabId, details.url, tab.title);
   } catch (err) {
-    console.error('Canopy: Error creating node', err);
+    console.error('TabTree: Error creating node', err);
   }
 });
 
@@ -153,8 +153,8 @@ chrome.webNavigation.onHistoryStateUpdated.addListener(async (details) => {
     const tab = await chrome.tabs.get(details.tabId);
     await createNode(details.tabId, details.url, tab.title);
   } catch (err) {
-    console.error('Canopy: Error creating node for SPA navigation', err);
+    console.error('TabTree: Error creating node for SPA navigation', err);
   }
 });
 
-console.log('Canopy: Service worker initialized');
+console.log('TabTree: Service worker initialized');

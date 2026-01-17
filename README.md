@@ -1,4 +1,4 @@
-# Canopy
+# TabTree
 
 **See your browsing history as a tree.** Each tab becomes a vertical timeline, showing exactly how you navigated the web. Visualize your research trails, understand your browsing patterns, and never lose track of that page you saw "a few clicks ago."
 
@@ -9,15 +9,15 @@
 
 1. **Clone or download:**
    ```bash
-   git clone git@github.com:mariobollini/canopy.git
+   git clone git@github.com:mariobollini/tabtree.git
    ```
-   Or [download the zip](https://github.com/mariobollini/canopy/archive/refs/tags/v0.1.0.zip)
+   Or [download the zip](https://github.com/mariobollini/tabtree/archive/refs/tags/v0.1.0.zip)
 
 2. **Load into Chrome:**
    - Navigate to `chrome://extensions/`
    - Enable **Developer mode** (toggle in top right)
    - Click **Load unpacked**
-   - Select the `canopy` folder
+   - Select the `tabtree` folder
 
 3. **Start browsing:**
    - The extension tracks automatically
@@ -70,7 +70,7 @@ Move through your history effortlessly:
 
 ## How It Works
 
-Canopy uses Chrome's `webNavigation` API to track page visits as they happen. Everything is stored locally in IndexedDB - nothing ever leaves your computer. Each tab gets a unique branch ID, and pages within a tab are linked chronologically to form your browsing tree.
+TabTree uses Chrome's `webNavigation` API to track page visits as they happen. Everything is stored locally in IndexedDB - nothing ever leaves your computer. Each tab gets a unique branch ID, and pages within a tab are linked chronologically to form your browsing tree.
 
 The visualization is rendered on HTML Canvas for smooth 60fps performance. The layout algorithm positions nodes by time (Y-axis) and tab (X-axis), with intelligent auto-panning to keep relevant content in view.
 
@@ -104,7 +104,7 @@ Not yet - coming in a future version!
 
 ## Contributing
 
-Found a bug? Want a feature? [Open an issue](https://github.com/mariobollini/canopy/issues) or submit a PR!
+Found a bug? Want a feature? [Open an issue](https://github.com/mariobollini/tabtree/issues) or submit a PR!
 
 ## License
 

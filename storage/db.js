@@ -1,4 +1,4 @@
-const DB_NAME = 'canopy';
+const DB_NAME = 'tabtree';
 const DB_VERSION = 1;
 
 let db = null;
