@@ -68,28 +68,35 @@ async function createBranch(tabId, openerNodeId = null) {
 }
 
 // Create a new node (page visit)
-async function createNode(tabId, url, title) {
+async function createNode(tabId, url, title, transitionType = null) {
   let branchId = await getTabMapping(tabId);
 
   // If no branch exists for this tab, create one
   if (!branchId) {
     let openerNodeId = null;
 
-    // Check if this tab was opened from another tab
+    // Check if this tab was opened from another tab via a link click
+    // Chrome sets openerTabId even for manual new tabs (Cmd+T), so we must
+    // verify the transition was actually from clicking a link
     if (pendingTabParents.has(tabId)) {
       const openerTabId = pendingTabParents.get(tabId);
-
-      // Try in-memory map first, then fall back to database
-      openerNodeId = lastNodePerTab.get(openerTabId);
-      if (!openerNodeId) {
-        // Fetch latest node from database for this opener tab
-        const openerNode = await getLatestNodeForTab(openerTabId);
-        openerNodeId = openerNode?.id || null;
-      }
-
       pendingTabParents.delete(tabId); // Clean up
 
-      console.log('TabTree: Tab', tabId, 'opened from tab', openerTabId, 'with node', openerNodeId);
+      // Only establish connection if this was a link click or form submit
+      const linkTransitions = ['link', 'form_submit'];
+      if (transitionType && linkTransitions.includes(transitionType)) {
+        // Try in-memory map first, then fall back to database
+        openerNodeId = lastNodePerTab.get(openerTabId);
+        if (!openerNodeId) {
+          // Fetch latest node from database for this opener tab
+          const openerNode = await getLatestNodeForTab(openerTabId);
+          openerNodeId = openerNode?.id || null;
+        }
+
+        console.log('TabTree: Tab', tabId, 'opened from tab', openerTabId, 'with node', openerNodeId);
+      } else {
+        console.log('TabTree: Tab', tabId, 'has opener', openerTabId, 'but transition was', transitionType, '- treating as independent');
+      }
     }
 
     const branch = await createBranch(tabId, openerNodeId);
@@ -138,7 +145,7 @@ chrome.webNavigation.onCommitted.addListener(async (details) => {
 
   try {
     const tab = await chrome.tabs.get(details.tabId);
-    await createNode(details.tabId, details.url, tab.title);
+    await createNode(details.tabId, details.url, tab.title, details.transitionType);
   } catch (err) {
     console.error('TabTree: Error creating node', err);
   }
