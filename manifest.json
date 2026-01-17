@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TabTree",
-  "description": "Visualize your browsing history as a branching tree",
+  "description": "Visualize your browsing history as a branching tree. 100% local - your data never leaves your device.",
   "version": "1.0.0",
   "permissions": [
     "tabs",
