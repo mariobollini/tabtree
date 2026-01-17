@@ -1,160 +1,115 @@
 # Canopy
 
-A Chrome extension that visualizes your browsing history as a tree, making it easy to understand how you explored the web across different tabs over time.
+**See your browsing history as a tree.** Each tab becomes a vertical timeline, showing exactly how you navigated the web. Visualize your research trails, understand your browsing patterns, and never lose track of that page you saw "a few clicks ago."
 
 ![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)
 ![Chrome](https://img.shields.io/badge/chrome-120%2B-green.svg)
 
-## Quick Start (For Testers)
+## Installation
 
-### Installation
-
-1. **Download the extension:**
-   - Option A: Clone the repo: `git clone git@github.com:mariobollini/canopy.git`
-   - Option B: [Download v0.1.0 zip](https://github.com/mariobollini/canopy/archive/refs/tags/v0.1.0.zip)
+1. **Clone or download:**
+   ```bash
+   git clone git@github.com:mariobollini/canopy.git
+   ```
+   Or [download the zip](https://github.com/mariobollini/canopy/archive/refs/tags/v0.1.0.zip)
 
 2. **Load into Chrome:**
-   - Open Chrome and go to `chrome://extensions/`
-   - Enable **"Developer mode"** (toggle in top right corner)
-   - Click **"Load unpacked"**
-   - Select the `canopy` folder (or unzipped folder)
+   - Navigate to `chrome://extensions/`
+   - Enable **Developer mode** (toggle in top right)
+   - Click **Load unpacked**
+   - Select the `canopy` folder
 
 3. **Start browsing:**
-   - The extension starts tracking immediately
-   - Open a **new tab** to see your history tree
-   - You'll need some browsing history for it to show anything interesting!
-
-### What to Test
-
-**Basic Features:**
-- ✅ Open multiple tabs, browse around, then open a new tab - do you see your history?
-- ✅ Are pages grouped by tab (columns)?
-- ✅ Does scrolling down show older history?
-- ✅ Can you click nodes to revisit pages?
-
-**Timeline:**
-- ✅ Do you see horizontal bands every 15 minutes?
-- ✅ Does the background get darker as you scroll back in time?
-- ✅ Are there time labels on the left (e.g., "2:30 PM", "Today", "Yesterday")?
-
-**Summaries:**
-- ✅ Does each column have a summary under the title?
-- ✅ If you browse docs, does it say "Reading documentation"?
-- ✅ If you browse GitHub, does it mention "code" or "repository"?
-
-**Navigation:**
-- ✅ Open 7+ tabs - do columns overflow with scroll?
-- ✅ Does scrolling down automatically pan to show relevant columns?
-- ✅ Can you manually scroll left/right (Shift+wheel or trackpad)?
-
-**Edge Cases:**
-- ✅ Close a tab - does it get a "CLOSED" badge?
-- ✅ When you scroll down, do column headers follow the visible nodes?
-- ✅ Does the extension work after restarting Chrome?
-
-### Known Limitations
-
-- **AI Summaries**: Chrome's built-in AI is experimental. If you see "AI not available", that's normal - the extension falls back to smart keyword extraction.
-- **Tab ID Persistence**: After restarting Chrome, tabs from the previous session appear as closed tabs.
-- **Incognito Mode**: Extension doesn't track incognito browsing (by design for privacy).
+   - The extension tracks automatically
+   - Open a new tab to see your history tree
+   - The more you browse, the more interesting it gets
 
 ## Features
 
 ### 🌳 Tree Visualization
-- **Each tab is a column** - see all your tabs side-by-side
-- **Vertical timeline** - newest pages at top, scroll down for older history
-- **15-minute bands** - horizontal lines show time progression
-- **Epoch markers** - "Recent", "Today", "Yesterday", "This Week", "Older"
+Your browsing history laid out spatially:
+- **Each tab = one column** - see all your research paths side-by-side
+- **Vertical timeline** - newest at top, scroll down to travel back in time
+- **Cross-tab connections** - see when you opened new tabs from links
+- **Time bands** - horizontal lines every 15 minutes show progression
+- **Epoch markers** - "Recent", "Today", "Yesterday" help orient you in time
+
+### ⏱️ Duration Tracking
+See what actually mattered:
+- **Variable height nodes** - taller pages = more time spent viewing them
+- **Visual distinction** - quick clickthroughs (< 10s) are compact, meaningful pages (> 60s) stand out
+- **Live duration** - open tabs show real-time viewing duration
+- **Smart defaults** - closed tabs get reasonable duration estimates
 
 ### 🎯 Smart Summaries
-- **AI-powered** (when available) - uses Chrome's built-in Gemini Nano
-- **Heuristic fallback** - keyword extraction and pattern detection
-- Summaries like: "Reading documentation (5 pages)" or "Researching react, hooks, state"
+Understand what each tab was about at a glance:
+- **AI-powered summaries** - uses Chrome's built-in Gemini Nano when available
+- **Keyword extraction** - fallback to smart pattern detection
+- Examples: "Reading documentation (5 pages)" or "Researching react, hooks, state"
+- **Editable titles** - click any column header to customize
 
-### 📍 Navigation
-- **Horizontal scrolling** - up to 6 columns visible at once (responsive)
-- **Auto-pan** - automatically shows relevant columns as you scroll through time
-- **Sticky headers** - column titles follow you as you scroll
-- **Click to open** - click any node to revisit that page
+### 📍 Smooth Navigation
+Move through your history effortlessly:
+- **Auto-pan** - scrolling down automatically shows relevant columns
+- **Horizontal scroll** - Shift+wheel to move between tabs
+- **Sticky headers** - column titles follow as you explore
+- **Click to revisit** - any node opens that page instantly
+- **Zoom controls** - in/out/fit buttons for perfect view
 
-### ⚡ Interactive Details
-- **Relative timestamps** - "2m ago", "1h ago" on each node
-- **Editable headers** - click column titles to rename them
-- **Closed tab badges** - see which tabs are no longer open
-- **Time labels** - hourly timestamps on the left margin
+### 🎨 Clean Design
+- **Minimal interface** - light theme, clean typography, no clutter
+- **Real favicons** - actual site icons from your history
+- **Smooth 60fps** - canvas-based rendering for fluid interaction
+- **Responsive layout** - adapts from 1 to 6 columns based on screen width
 
-### 🎨 Design
-- **Light minimalist** - clean white background, soft colors
-- **High contrast** - easy-to-read text and icons
-- **Real favicons** - actual site icons, not placeholders
-- **Smooth interactions** - 60fps scrolling and panning
+### 🔒 Privacy First
+- **100% local** - all data stays on your computer (IndexedDB)
+- **No servers** - nothing leaves your browser
+- **No tracking** - respects incognito mode
+- **No telemetry** - zero analytics or phone-home behavior
 
 ## How It Works
 
-### Data Collection
-- Tracks page visits using Chrome's `webNavigation` API
-- Stores data locally in IndexedDB (nothing leaves your computer)
-- Each tab gets a unique branch ID
-- Pages in the same tab are linked chronologically
+Canopy uses Chrome's `webNavigation` API to track page visits as they happen. Everything is stored locally in IndexedDB - nothing ever leaves your computer. Each tab gets a unique branch ID, and pages within a tab are linked chronologically to form your browsing tree.
 
-### Visualization
-- Canvas-based rendering for smooth performance
-- Layout algorithm positions nodes by time (Y-axis) and tab (X-axis)
-- Timeline bands drawn every 15 minutes
-- Background gradient shifts at epoch boundaries
+The visualization is rendered on HTML Canvas for smooth 60fps performance. The layout algorithm positions nodes by time (Y-axis) and tab (X-axis), with intelligent auto-panning to keep relevant content in view.
 
-### Privacy
-- ✅ All data stays local (no servers, no cloud)
-- ✅ No tracking in incognito mode
-- ✅ Can be cleared via Chrome's "Clear browsing data"
-- ✅ No analytics or telemetry
+## Usage Tips
 
-## Keyboard Shortcuts
+- **Scroll down** to travel back in time
+- **Shift + scroll** to move between tab columns
+- **Drag** to pan around freely
+- **Click any node** to revisit that page
+- **Click column headers** to rename tabs
+- **Hover nodes** to see full URL and view duration
 
-- **Scroll down/up** - Travel through time
-- **Shift + Scroll** - Scroll horizontally through columns
-- **Drag** - Pan around the tree
-- **Click node** - Open that page
-
-## Troubleshooting
-
-**Nothing shows up when I open a new tab:**
-- Make sure you've browsed to a few pages first
-- Check that the extension is enabled at `chrome://extensions/`
-- Look for errors in the browser console (F12)
-
-**Summaries show error messages:**
-- Chrome's AI isn't widely available yet (requires Chrome 127+ or Canary)
-- The extension falls back to keyword-based summaries automatically
-- Enable at `chrome://flags/#optimization-guide-on-device-model` if you want to try AI
-
-**Performance is slow with lots of history:**
-- The extension handles 10,000+ nodes efficiently
-- Try clearing old history: Chrome Settings → Privacy → Clear browsing data
-
-**Can I export my tree?**
-- Not yet! This is on the roadmap for future versions
-
-## Development
+## Tech Stack
 
 Built with vanilla JavaScript:
-- **Canvas API** for rendering
-- **IndexedDB** for storage
-- **Chrome Extension Manifest V3**
-- No external dependencies
+- Canvas API for rendering
+- IndexedDB for local storage
+- Chrome Extension Manifest V3
+- Zero external dependencies
 
-See `agents.md` for detailed implementation notes.
+## FAQ
+
+**Nothing shows up when I open a new tab?**
+Browse a few pages first - the extension needs some history to visualize.
+
+**AI summaries not working?**
+Chrome's built-in AI (Gemini Nano) isn't widely available yet. The extension automatically falls back to keyword-based summaries.
+
+**Can I export my tree?**
+Not yet - coming in a future version!
 
 ## Contributing
 
-Found a bug? Have a feature idea?
-- Open an issue: https://github.com/mariobollini/canopy/issues
-- Or submit a pull request!
+Found a bug? Want a feature? [Open an issue](https://github.com/mariobollini/canopy/issues) or submit a PR!
 
 ## License
 
-MIT License - feel free to use and modify!
+MIT - free to use and modify
 
 ---
 
-**Version 0.1.0** - First stable release with timeline visualization
+Made by [@mariobollini](https://github.com/mariobollini) • v0.1.0

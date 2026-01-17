@@ -215,7 +215,7 @@ export class TreeRenderer {
         this.hoveredNode = node;
         needsRender = true;
         if (this.onNodeHover) {
-          this.onNodeHover(node?.node || null);
+          this.onNodeHover(node || null); // Pass full positioned node with duration
         }
       }
 

@@ -144,9 +144,14 @@ function handleNodeClick(node) {
   }
 }
 
-function handleNodeHover(node) {
-  if (node) {
-    showTooltip(node);
+function handleNodeHover(posNode) {
+  if (posNode) {
+    // Create enhanced node object with duration
+    const nodeWithDuration = {
+      ...posNode.node,
+      duration: posNode.duration
+    };
+    showTooltip(nodeWithDuration);
   } else {
     hideTooltip();
   }
@@ -210,10 +215,29 @@ function showEditInput(header) {
 
 function showTooltip(node) {
   const time = new Date(node.timestamp).toLocaleString();
+
+  // Format duration if available
+  let durationHtml = '';
+  if (node.duration !== undefined) {
+    const durationSeconds = Math.floor(node.duration / 1000);
+    const minutes = Math.floor(durationSeconds / 60);
+    const seconds = durationSeconds % 60;
+
+    let durationText;
+    if (minutes > 0) {
+      durationText = `${minutes}m ${seconds}s`;
+    } else {
+      durationText = `${seconds}s`;
+    }
+
+    durationHtml = `<div class="tooltip-duration">Viewed for: ${durationText}</div>`;
+  }
+
   tooltip.innerHTML = `
     <div class="tooltip-title">${escapeHtml(node.title || 'Untitled')}</div>
     <div class="tooltip-url">${escapeHtml(node.url)}</div>
     <div class="tooltip-time">${time}</div>
+    ${durationHtml}
   `;
   tooltip.classList.remove('hidden');
 }

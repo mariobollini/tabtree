@@ -127,6 +127,13 @@ html, body {
   margin-top: 6px;
 }
 
+#tooltip .tooltip-duration {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
 #edit-input {
   position: fixed;
   padding: 4px 8px;

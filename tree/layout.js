@@ -9,6 +9,86 @@ const HORIZONTAL_GAP = 28;
 const LEFT_MARGIN = 40;
 const HEADER_HEIGHT = 85; // Space for column headers + summary
 
+const MIN_NODE_HEIGHT = 36;   // 60% of base for quick views (< 10s)
+const MAX_NODE_HEIGHT = 90;   // 150% of base for meaningful views (> 60s)
+const DEFAULT_DURATION_MS = 60000; // 1 minute for closed tab last nodes
+
+/**
+ * Calculate view duration for each node based on timestamps
+ * Duration is calculated as the time between consecutive navigations in the same tab
+ * @param {Array} nodes - All nodes
+ * @param {Set} openTabIds - Set of currently open tab IDs
+ * @returns {Map<string, number>} Map of nodeId -> duration in milliseconds
+ */
+function calculateNodeDurations(nodes, openTabIds) {
+  // Group nodes by tab
+  const nodesByTab = new Map();
+  for (const node of nodes) {
+    if (!nodesByTab.has(node.tabId)) {
+      nodesByTab.set(node.tabId, []);
+    }
+    nodesByTab.get(node.tabId).push(node);
+  }
+
+  const durationsMap = new Map();
+  const now = Date.now();
+
+  // Calculate duration for each node
+  for (const [tabId, tabNodes] of nodesByTab) {
+    // Sort by timestamp ascending (oldest first)
+    const sorted = [...tabNodes].sort((a, b) => a.timestamp - b.timestamp);
+
+    for (let i = 0; i < sorted.length; i++) {
+      const node = sorted[i];
+      const nextNode = sorted[i + 1];
+
+      if (nextNode) {
+        // Duration = time until next navigation in same tab
+        const duration = nextNode.timestamp - node.timestamp;
+        durationsMap.set(node.id, Math.max(duration, 0)); // Guard against negative
+      } else {
+        // Last node in tab
+        if (openTabIds.has(tabId)) {
+          // Tab still open - calculate live duration up to now
+          const liveDuration = now - node.timestamp;
+          durationsMap.set(node.id, Math.max(liveDuration, 0));
+        } else {
+          // Tab closed - use default duration
+          durationsMap.set(node.id, DEFAULT_DURATION_MS);
+        }
+      }
+    }
+  }
+
+  return durationsMap;
+}
+
+/**
+ * Calculate node height based on view duration
+ * Linear scale: <10s = 60%, 10-60s = 60-150%, >60s = 150%
+ * @param {number} durationMs - Duration in milliseconds
+ * @returns {number} Height in pixels
+ */
+function calculateNodeHeight(durationMs) {
+  const durationSeconds = durationMs / 1000;
+
+  // Clamp to avoid extreme values (max 10 minutes)
+  const clampedDuration = Math.min(durationSeconds, 600);
+
+  if (clampedDuration < 10) {
+    // < 10s: scale from MIN to BASE (36px to 60px)
+    const ratio = clampedDuration / 10;
+    return MIN_NODE_HEIGHT + (NODE_HEIGHT - MIN_NODE_HEIGHT) * ratio;
+  } else if (clampedDuration < 60) {
+    // 10s - 60s: scale from BASE to MAX (60px to 90px)
+    const ratio = (clampedDuration - 10) / 50;
+    return NODE_HEIGHT + (MAX_NODE_HEIGHT - NODE_HEIGHT) * ratio;
+  } else {
+    // 60s+: cap at MAX
+    return MAX_NODE_HEIGHT;
+  }
+}
+
 export function calculateLayout(data, viewportWidth, openTabIds = new Set()) {
   const { nodes, branches } = data;
 
@@ -37,11 +117,23 @@ export function calculateLayout(data, viewportWidth, openTabIds = new Set()) {
   // Sort all nodes by timestamp (newest first) for Y positioning
   const sortedNodes = [...nodes].sort((a, b) => b.timestamp - a.timestamp);
 
-  // Assign Y positions based on chronological order (newest at top)
+  // Calculate view durations for all nodes
+  const durationsMap = calculateNodeDurations(nodes, openTabIds);
+
+  // Assign Y positions based on chronological order with variable heights (newest at top)
   // Add HEADER_HEIGHT to leave room for column titles
   const nodeYPositions = new Map();
-  sortedNodes.forEach((node, index) => {
-    nodeYPositions.set(node.id, HEADER_HEIGHT + VERTICAL_GAP + index * (NODE_HEIGHT + VERTICAL_GAP));
+  const nodeHeights = new Map();
+  let currentY = HEADER_HEIGHT + VERTICAL_GAP;
+
+  sortedNodes.forEach((node) => {
+    const duration = durationsMap.get(node.id) || 0;
+    const height = calculateNodeHeight(duration);
+
+    nodeYPositions.set(node.id, currentY);
+    nodeHeights.set(node.id, height);
+
+    currentY += height + VERTICAL_GAP;
   });
 
   // Build positioned nodes
@@ -51,7 +143,8 @@ export function calculateLayout(data, viewportWidth, openTabIds = new Set()) {
     x: branchXPositions.get(node.branchId) || LEFT_MARGIN,
     y: nodeYPositions.get(node.id),
     width: NODE_WIDTH,
-    height: NODE_HEIGHT
+    height: nodeHeights.get(node.id) || NODE_HEIGHT,
+    duration: durationsMap.get(node.id) // Include for tooltips
   }));
 
   // Build connections (only within same branch)
@@ -138,7 +231,7 @@ export function calculateLayout(data, viewportWidth, openTabIds = new Set()) {
   const maxX = sortedBranches.length > 0
     ? LEFT_MARGIN + sortedBranches.length * (NODE_WIDTH + HORIZONTAL_GAP)
     : viewportWidth;
-  const maxY = HEADER_HEIGHT + VERTICAL_GAP + sortedNodes.length * (NODE_HEIGHT + VERTICAL_GAP);
+  const maxY = currentY; // Already accumulated from Y-positioning loop
 
   return {
     positionedNodes,
